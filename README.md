@@ -111,6 +111,19 @@ Two messages come from the game, not the launcher:
 - `Unable to locate English counter names in registry Perflib 009` — an OSHI/JNA quirk on Windows. Cosmetic.
 - `Failed to fetch user properties: 401` and `Realms authentication error` — expected on an offline account; they disappear once you sign in with Microsoft.
 
+## Releasing from CI
+
+`.github/workflows/release.yml` builds Windows, macOS and Linux on a tag and publishes them to a GitHub release, `latest.yml` included — which is the file electron-updater reads:
+
+```bash
+npm version 1.0.1
+git push --follow-tags
+```
+
+`GITHUB_TOKEN` is provided by Actions, so no secret setup is needed for a public repository.
+
+To publish a build by hand instead, upload **all** of `release/KryoClient-Setup-<version>.exe`, `.blockmap` and `latest.yml` to the release — without `latest.yml` the updater has nothing to compare against.
+
 ## Licence
 
 MIT. Minecraft is a trademark of Mojang Studios; KRYO is not affiliated with Mojang Studios or Microsoft.
