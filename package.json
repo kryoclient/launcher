@@ -1,0 +1,31 @@
+{
+  "name": "kryo-launcher",
+  "productName": "KRYO Client",
+  "version": "1.0.0",
+  "description": "Free Minecraft launcher built for performance",
+  "main": "dist/main/index.js",
+  "author": "KRYO",
+  "license": "MIT",
+  "scripts": {
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "tsc -p tsconfig.renderer.json",
+    "copy:assets": "node scripts/copy-assets.mjs",
+    "build": "npm run build:main && npm run build:renderer && npm run copy:assets",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron . --dev",
+    "dist": "npm run build && electron-builder --win --publish never && npm run checksums",
+    "dist:all": "npm run build && electron-builder -mwl --publish never && npm run checksums",
+    "checksums": "node scripts/checksums.mjs"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
+    "@types/node": "^24.3.0",
+    "electron": "^38.1.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.9.2"
+  }
+}

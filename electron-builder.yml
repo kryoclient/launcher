@@ -1,0 +1,35 @@
+appId: net.kryoclient.launcher
+productName: KRYO Client
+copyright: Copyright © 2026 KRYO
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - package.json
+publish:
+  provider: github
+  owner: kryoclient
+  repo: launcher
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: KryoClient-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  shortcutName: KRYO Client
+  deleteAppDataOnUninstall: false
+mac:
+  target:
+    - dmg
+  category: public.app-category.games
+  artifactName: KryoClient-${version}.${ext}
+linux:
+  target:
+    - AppImage
+  category: Game
+  artifactName: KryoClient-${version}.${ext}

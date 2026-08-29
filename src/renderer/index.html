@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: https://textures.minecraft.net https://cdn.modrinth.com; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    />
+    <title>KRYO Client</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="titlebar">
+      <div class="titlebar-left">
+        <svg viewBox="0 0 40 40" class="logo" aria-hidden="true">
+          <path d="M20 2 36 11v18l-16 9-16-9V11L20 2Z" fill="none" stroke="currentColor" stroke-width="1.6" />
+          <path d="M14.5 13v14M14.5 20.4 24 13M14.5 19.6 24 27" stroke="currentColor" stroke-width="2.1" stroke-linecap="square" />
+        </svg>
+        <span class="titlebar-name">KRYO CLIENT</span>
+        <span class="titlebar-version">1.0</span>
+      </div>
+      <div class="titlebar-actions">
+        <button type="button" data-window="minimize" aria-label="Minimize"><span class="win-min"></span></button>
+        <button type="button" data-window="maximize" aria-label="Maximize"><span class="win-max"></span></button>
+        <button type="button" data-window="close" class="danger" aria-label="Close">✕</button>
+      </div>
+    </header>
+
+    <div class="shell">
+      <nav class="sidebar">
+        <button type="button" class="nav-item active" data-view="play">
+          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5Z" /></svg>
+          Play
+        </button>
+        <button type="button" class="nav-item" data-view="mods">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M4 12h16M4 17h11" /></svg>
+          Mods
+        </button>
+        <button type="button" class="nav-item" data-view="skins">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8ZM4 21a8 8 0 0 1 16 0" /></svg>
+          Capes
+        </button>
+        <button type="button" class="nav-item" data-view="servers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16v5H4V6Zm0 7h16v5H4v-5Z" /></svg>
+          Servers
+        </button>
+        <button type="button" class="nav-item" data-view="accounts">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 21a7 7 0 0 1 14 0" /></svg>
+          Accounts
+        </button>
+        <button type="button" class="nav-item" data-view="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></svg>
+          Settings
+        </button>
+
+        <button type="button" class="account" id="account-card" data-view="accounts">
+          <div class="account-avatar" id="account-avatar"></div>
+          <div class="account-meta">
+            <span class="account-name" id="account-name">No account</span>
+            <span class="account-type" id="account-type">add one</span>
+          </div>
+        </button>
+      </nav>
+
+      <main class="content">
+        <section class="view active" data-view="play">
+          <div class="view-head">
+            <div>
+              <span class="eyebrow">selected profile</span>
+              <h1 id="play-title">No profile</h1>
+            </div>
+            <div class="profile-switch">
+              <select id="profile-select" aria-label="Profile"></select>
+              <button type="button" class="ghost" id="profile-new">New</button>
+              <button type="button" class="ghost" id="profile-delete">Delete</button>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="panel">
+              <span class="panel-title">Version</span>
+              <div class="field">
+                <label for="version-select">Minecraft</label>
+                <select id="version-select"></select>
+              </div>
+              <div class="field">
+                <label for="loader-select">Loader</label>
+                <select id="loader-select">
+                  <option value="vanilla">Vanilla</option>
+                  <option value="fabric">Fabric</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="memory-range">Memory <span id="memory-value" class="mono">4096 MB</span></label>
+                <input type="range" id="memory-range" min="1024" max="16384" step="512" />
+              </div>
+            </div>
+
+            <div class="panel">
+              <span class="panel-title">Runtime</span>
+              <div class="stat-row">
+                <div class="stat"><span class="stat-value mono" id="stat-java">—</span><span class="stat-key">java</span></div>
+                <div class="stat"><span class="stat-value mono" id="stat-mods">0</span><span class="stat-key">mods</span></div>
+                <div class="stat"><span class="stat-value mono" id="stat-installed">0</span><span class="stat-key">installed</span></div>
+                <div class="stat"><span class="stat-value mono" id="stat-played">never</span><span class="stat-key">last played</span></div>
+              </div>
+              <div class="field">
+                <label for="jvm-args">JVM arguments</label>
+                <input type="text" id="jvm-args" spellcheck="false" />
+              </div>
+              <div class="field">
+                <label>Window</label>
+                <div class="inline">
+                  <input type="number" id="res-width" min="640" step="10" aria-label="Width" />
+                  <input type="number" id="res-height" min="480" step="10" aria-label="Height" />
+                  <label class="switch-row compact">
+                    <input type="checkbox" id="opt-fullscreen" />
+                    <span>Fullscreen</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="progress-block">
+            <div class="progress-head">
+              <span id="progress-label">Ready</span>
+              <span class="mono" id="progress-count"></span>
+            </div>
+            <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+          </div>
+
+          <div class="play-row">
+            <button type="button" class="primary big" id="play-button">Play</button>
+            <button type="button" class="ghost" id="install-button">Install only</button>
+            <button type="button" class="ghost" id="folder-button">Open folder</button>
+            <button type="button" class="ghost danger-text hidden" id="kill-button">Stop</button>
+          </div>
+
+          <div class="log-block">
+            <div class="log-head">
+              <span class="eyebrow">game output</span>
+              <div class="inline-gap">
+                <button type="button" class="link" id="log-open">open log file</button>
+                <button type="button" class="link" id="log-clear">clear</button>
+              </div>
+            </div>
+            <pre class="log mono" id="log"></pre>
+          </div>
+        </section>
+
+        <section class="view" data-view="mods">
+          <div class="view-head">
+            <div>
+              <span class="eyebrow">fabric mods</span>
+              <h1>Mod library</h1>
+            </div>
+            <div class="search-row">
+              <input type="search" id="mod-search" placeholder="Search Modrinth…" />
+              <button type="button" class="ghost" id="mod-search-button">Search</button>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="panel">
+              <span class="panel-title">Installed <span class="mono" id="mods-count">0</span></span>
+              <div class="list" id="mods-installed"></div>
+            </div>
+            <div class="panel">
+              <span class="panel-title">Modrinth results</span>
+              <div class="list" id="mods-results">
+                <p class="empty">Search for a mod to install it into the active profile.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" data-view="skins">
+          <div class="view-head">
+            <div>
+              <span class="eyebrow">cosmetics</span>
+              <h1>Capes</h1>
+            </div>
+            <span class="note" id="capes-note">Capes come from your Minecraft account.</span>
+          </div>
+
+          <div class="panel">
+            <span class="panel-title">Skin</span>
+            <div class="skin-row">
+              <div class="skin-preview" id="skin-preview"></div>
+              <div class="skin-actions">
+                <p class="hint" id="skin-hint">Sign in with Microsoft to change your skin.</p>
+                <div class="inline-gap">
+                  <button type="button" class="ghost" id="skin-classic">Upload classic</button>
+                  <button type="button" class="ghost" id="skin-slim">Upload slim</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="cape-grid" id="cape-grid"></div>
+        </section>
+
+        <section class="view" data-view="servers">
+          <div class="view-head">
+            <div>
+              <span class="eyebrow">server list</span>
+              <h1>Servers</h1>
+            </div>
+            <button type="button" class="ghost" id="servers-refresh">Refresh</button>
+          </div>
+          <div class="list" id="server-list"></div>
+        </section>
+
+        <section class="view" data-view="accounts">
+          <div class="view-head">
+            <div>
+              <span class="eyebrow">who is playing</span>
+              <h1>Accounts</h1>
+            </div>
+            <div class="inline-gap">
+              <button type="button" class="primary" id="add-microsoft">Sign in with Microsoft</button>
+              <button type="button" class="ghost" id="add-offline-open">Add offline</button>
+            </div>
+          </div>
+
+          <div class="panel" id="offline-form" hidden>
+            <span class="panel-title">Offline account</span>
+            <div class="inline">
+              <input type="text" id="offline-name" maxlength="16" placeholder="Username" spellcheck="false" />
+              <button type="button" class="ghost" id="add-offline">Add</button>
+            </div>
+            <p class="hint">Offline accounts work for singleplayer and cracked servers. Licensed servers, Realms and
+              official skins need the Microsoft option.</p>
+          </div>
+
+          <div class="panel">
+            <span class="panel-title">Linked accounts</span>
+            <div class="list" id="account-list"></div>
+          </div>
+        </section>
+
+        <section class="view" data-view="settings">
+          <div class="view-head">
+            <div>
+              <span class="eyebrow">configuration</span>
+              <h1>Settings</h1>
+            </div>
+            <button type="button" class="ghost" id="open-logs">Open logs</button>
+          </div>
+
+          <div class="panel">
+            <span class="panel-title">Directories</span>
+            <div class="field">
+              <label for="game-dir">Game directory</label>
+              <div class="inline">
+                <input type="text" id="game-dir" spellcheck="false" />
+                <button type="button" class="ghost" id="game-dir-pick">Browse</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <span class="panel-title">Java</span>
+            <div class="field">
+              <label for="java-select">Runtime for this profile</label>
+              <div class="inline">
+                <select id="java-select"></select>
+                <button type="button" class="ghost" id="java-pick">Custom</button>
+              </div>
+            </div>
+            <label class="switch-row">
+              <input type="checkbox" id="opt-managed-java" />
+              <span>Download the right Java automatically when a version needs it</span>
+            </label>
+            <div class="inline-gap">
+              <button type="button" class="chip" data-java="8">get java 8</button>
+              <button type="button" class="chip" data-java="17">get java 17</button>
+              <button type="button" class="chip" data-java="21">get java 21</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <span class="panel-title">Microsoft sign-in</span>
+            <div class="field">
+              <label for="azure-id">Azure application (client) ID</label>
+              <input type="text" id="azure-id" spellcheck="false" placeholder="00000000-0000-0000-0000-000000000000" />
+            </div>
+            <p class="hint">Register a free app at portal.azure.com → App registrations → Personal Microsoft accounts,
+              then turn on "Allow public client flows". Paste the client ID here to enable licensed login.</p>
+          </div>
+
+          <div class="panel">
+            <span class="panel-title">Updates</span>
+            <div class="inline">
+              <span class="mono update-text" id="update-text">Checking…</span>
+              <button type="button" class="ghost" id="update-check">Check now</button>
+              <button type="button" class="primary hidden" id="update-install">Restart &amp; update</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <span class="panel-title">Behaviour</span>
+            <label class="switch-row">
+              <input type="checkbox" id="opt-snapshots" />
+              <span>Show snapshots in the version list</span>
+            </label>
+            <label class="switch-row">
+              <input type="checkbox" id="opt-keep-open" />
+              <span>Keep the launcher open while playing</span>
+            </label>
+            <label class="switch-row">
+              <input type="checkbox" id="opt-telemetry" />
+              <span>Send anonymous crash reports</span>
+            </label>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="overlay hidden" id="auth-overlay">
+      <div class="login-card">
+        <span class="eyebrow">microsoft sign-in</span>
+        <h2 id="auth-title">Waiting for you</h2>
+        <p id="auth-text">Open the page below and enter the code.</p>
+        <div class="code mono" id="auth-code">————</div>
+        <div class="inline-gap center">
+          <button type="button" class="primary" id="auth-open">Open page</button>
+          <button type="button" class="ghost" id="auth-copy">Copy code</button>
+        </div>
+        <button type="button" class="link" id="auth-cancel">cancel</button>
+        <span class="error" id="auth-error"></span>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
