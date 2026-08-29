@@ -6,6 +6,9 @@ import type {
   InstalledVersion,
   JavaInfo,
   LauncherState,
+  LoaderId,
+  LoaderInfo,
+  LoaderVersion,
   Profile,
   Progress,
   ServerEntry,
@@ -13,19 +16,22 @@ import type {
   VersionSummary
 } from "../shared/types";
 import { AccountStore } from "./auth/accounts";
+import { forgetMicrosoftSession, requestAuthorizationCode } from "./auth/loginWindow";
 import {
   AuthError,
   authenticateWithXbox,
+  buildChallenge,
+  exchangeCode,
   fetchProfile,
-  hasGameLicense,
-  pollForTokens,
-  requestDeviceCode
+  hasGameLicense
 } from "./auth/microsoft";
 import { findJavaInstallations, probeJava } from "./java";
 import { downloadJava, managedJava } from "./javaProvision";
-import { installFabric, installVersion, loadManifest, resolveVersionJson, versionJarPath } from "./install";
+import { installVersion, loadManifest, resolveVersionJson, versionJarPath } from "./install";
+import { LOADERS, loaderVersions, prepareLoader } from "./loaders";
 import { instanceDir, launchGame } from "./launch";
 import { deleteMod, installMod, listMods, searchMods, toggleMod } from "./mods";
+import { listReleases } from "./releases";
 import { pingAll } from "./serverPing";
 import { Store } from "./store";
 import { checkForUpdates, currentUpdateStatus, installUpdate } from "./updater";
@@ -41,7 +47,6 @@ let window: BrowserWindow | null = null;
 let store: Store;
 let accounts: AccountStore;
 let running: ChildProcess | null = null;
-let authCancelled = false;
 
 function send(channel: string, payload: unknown): void {
   window?.webContents.send(channel, payload);
@@ -73,7 +78,7 @@ function createWindow(): void {
     frame: false,
     backgroundColor: "#080a0c",
     title: "KRYO Client",
-    icon: join(__dirname, "..", "..", "build", "icon.png"),
+    icon: join(__dirname, "..", "icon.png"),
     webPreferences: {
       preload: join(__dirname, "..", "preload", "index.js"),
       contextIsolation: true,
@@ -125,10 +130,17 @@ function requireProfile(profileId: string): Profile {
   return profile;
 }
 
-async function ensureVersion(profile: Profile): Promise<string> {
+async function prepareProfile(profile: Profile): Promise<string> {
   if (!profile.versionId) throw new Error("Pick a Minecraft version first");
-  if (profile.loader === "fabric") return installFabric(store.gameDir(), profile.versionId);
-  return profile.versionId;
+
+  return prepareLoader({
+    loader: profile.loader,
+    loaderVersion: profile.loaderVersion,
+    gameDir: store.gameDir(),
+    minecraft: profile.versionId,
+    requireJava: (major) => resolveJavaPath(profile, major),
+    onProgress: (progress) => send("game:progress", progress)
+  });
 }
 
 async function resolveJavaPath(profile: Profile, requiredMajor: number): Promise<string> {
@@ -178,30 +190,23 @@ function registerHandlers(): void {
     return state();
   });
 
-  ipcMain.handle("auth:cancel", () => {
-    authCancelled = true;
+  ipcMain.handle("auth:forget", async () => {
+    await forgetMicrosoftSession();
     return true;
   });
 
   ipcMain.handle("auth:microsoft", async () => {
-    const clientId = store.settings().azureClientId.trim();
-    if (!clientId) {
-      throw new AuthError(
-        "client-id",
-        "Add your Azure application (client) ID in Settings first — see the README for the two-minute setup."
-      );
-    }
+    const clientId = store.settings().azureClientId;
+    const challenge = buildChallenge(clientId);
 
-    authCancelled = false;
+    send("auth:phase", { phase: "browser", message: "Sign in in the Microsoft window" });
+    const code = await requestAuthorizationCode(window, challenge);
 
-    const { prompt, deviceCode, interval } = await requestDeviceCode(clientId);
-    send("auth:prompt", prompt);
+    send("auth:phase", { phase: "exchange", message: "Checking your licence" });
+    const tokens = await exchangeCode(clientId, code, challenge);
+    const session = await authenticateWithXbox(tokens.accessToken, challenge.flavor);
 
-    const tokens = await pollForTokens(clientId, deviceCode, interval, prompt.expiresIn, () => authCancelled);
-    const session = await authenticateWithXbox(tokens.accessToken);
-
-    const licensed = await hasGameLicense(session.accessToken);
-    if (!licensed) {
+    if (!(await hasGameLicense(session.accessToken))) {
       throw new AuthError(
         "no-license",
         "This Microsoft account does not own Minecraft Java Edition. Buy the game or use offline mode."
@@ -209,7 +214,14 @@ function registerHandlers(): void {
     }
 
     const profile = await fetchProfile(session.accessToken);
-    accounts.addMicrosoft(profile, tokens.refreshToken, session.accessToken, session.expiresAt, session.xuid);
+    accounts.addMicrosoft(
+      profile,
+      tokens.refreshToken,
+      session.accessToken,
+      session.expiresAt,
+      session.xuid,
+      challenge.flavor
+    );
     log(`microsoft account linked: ${profile.name}`);
 
     return state();
@@ -256,12 +268,19 @@ function registerHandlers(): void {
 
   ipcMain.handle("versions:list", async (): Promise<VersionSummary[]> => {
     const manifest = await loadManifest();
-    const showSnapshots = store.settings().showSnapshots;
-    return manifest.versions
-      .filter((v) => showSnapshots || v.type === "release")
-      .slice(0, 260)
-      .map((v) => ({ id: v.id, type: v.type, releaseTime: v.releaseTime }));
+    return manifest.versions.map((version) => ({
+      id: version.id,
+      type: version.type,
+      releaseTime: version.releaseTime
+    }));
   });
+
+  ipcMain.handle("loaders:list", (): LoaderInfo[] => LOADERS);
+
+  ipcMain.handle(
+    "loaders:versions",
+    (_event, loader: LoaderId, minecraft: string): Promise<LoaderVersion[]> => loaderVersions(loader, minecraft)
+  );
 
   ipcMain.handle("versions:installed", () => installedVersions());
 
@@ -296,14 +315,18 @@ function registerHandlers(): void {
   ipcMain.handle("mods:delete", (_event, profileId: string, file: string) =>
     deleteMod(store.gameDir(), profileId, file)
   );
-  ipcMain.handle("mods:search", (_event, query: string, gameVersion: string) => searchMods(query, gameVersion));
-  ipcMain.handle("mods:install", (_event, profileId: string, projectId: string, gameVersion: string) =>
-    installMod(store.gameDir(), profileId, projectId, gameVersion)
+  ipcMain.handle("mods:search", (_event, query: string, gameVersion: string, loader: LoaderId) =>
+    searchMods(query, gameVersion, loader)
+  );
+  ipcMain.handle(
+    "mods:install",
+    (_event, profileId: string, projectId: string, gameVersion: string, loader: LoaderId) =>
+      installMod(store.gameDir(), profileId, projectId, gameVersion, loader)
   );
 
   ipcMain.handle("game:install", async (_event, profileId: string) => {
     const profile = requireProfile(profileId);
-    const versionId = await ensureVersion(profile);
+    const versionId = await prepareProfile(profile);
     const version = await installVersion(store.gameDir(), versionId, (progress: Progress) =>
       send("game:progress", progress)
     );
@@ -321,7 +344,7 @@ function registerHandlers(): void {
     const clientId = store.settings().azureClientId.trim();
     const { account, accessToken } = await accounts.sessionFor(active.id, clientId);
 
-    const versionId = await ensureVersion(profile);
+    const versionId = await prepareProfile(profile);
     const version = await installVersion(store.gameDir(), versionId, (progress) => send("game:progress", progress));
 
     const javaPath = await resolveJavaPath(profile, version.javaVersion?.majorVersion ?? 8);
@@ -388,6 +411,8 @@ function registerHandlers(): void {
     return true;
   });
 
+  ipcMain.handle("releases:list", (_event, refresh: boolean) => listReleases(Boolean(refresh)));
+
   ipcMain.handle("update:status", () => currentUpdateStatus());
 
   ipcMain.handle("update:check", () =>
@@ -409,6 +434,7 @@ function registerHandlers(): void {
 }
 
 app.whenReady().then(() => {
+  app.setAppUserModelId("net.kryoclient.launcher");
   store = new Store();
   accounts = new AccountStore();
   registerHandlers();

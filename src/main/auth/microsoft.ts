@@ -1,19 +1,24 @@
-const DEVICE_CODE_URL = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
-const TOKEN_URL = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
+import { createHash, randomBytes } from "node:crypto";
+
+const LIVE_AUTHORIZE = "https://login.live.com/oauth20_authorize.srf";
+const LIVE_TOKEN = "https://login.live.com/oauth20_token.srf";
+const LIVE_REDIRECT = "https://login.live.com/oauth20_desktop.srf";
+const LIVE_SCOPE = "service::user.auth.xboxlive.com::MBI_SSL";
+
+const AZURE_AUTHORIZE = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
+const AZURE_TOKEN = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
+const AZURE_REDIRECT = "https://login.microsoftonline.com/common/oauth2/nativeclient";
+const AZURE_SCOPE = "XboxLive.signin offline_access";
+
 const XBL_URL = "https://user.auth.xboxlive.com/user/authenticate";
 const XSTS_URL = "https://xsts.auth.xboxlive.com/xsts/authorize";
 const MC_LOGIN_URL = "https://api.minecraftservices.com/authentication/login_with_xbox";
 const MC_ENTITLEMENTS_URL = "https://api.minecraftservices.com/entitlements/mcstore";
 const MC_PROFILE_URL = "https://api.minecraftservices.com/minecraft/profile";
 
-const SCOPE = "XboxLive.signin offline_access";
+export const DEFAULT_CLIENT_ID = "00000000402b5328";
 
-export interface DeviceCodePrompt {
-  userCode: string;
-  verificationUri: string;
-  expiresIn: number;
-  message: string;
-}
+export type AuthFlavor = "live" | "azure";
 
 export interface MicrosoftTokens {
   accessToken: string;
@@ -34,6 +39,13 @@ export interface MinecraftProfile {
   capes: { id: string; state: string; url: string; alias?: string }[];
 }
 
+export interface AuthChallenge {
+  url: string;
+  redirectUri: string;
+  verifier: string;
+  flavor: AuthFlavor;
+}
+
 export class AuthError extends Error {
   readonly code: string;
 
@@ -44,18 +56,82 @@ export class AuthError extends Error {
   }
 }
 
-async function postJson<T>(url: string, body: unknown, headers: Record<string, string> = {}): Promise<T> {
+export function resolveClientId(configured: string): string {
+  return configured.trim() || DEFAULT_CLIENT_ID;
+}
+
+export function flavorFor(clientId: string): AuthFlavor {
+  return resolveClientId(clientId) === DEFAULT_CLIENT_ID ? "live" : "azure";
+}
+
+export function redirectUriFor(flavor: AuthFlavor): string {
+  return flavor === "live" ? LIVE_REDIRECT : AZURE_REDIRECT;
+}
+
+function base64Url(buffer: Buffer): string {
+  return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export function buildChallenge(configuredClientId: string): AuthChallenge {
+  const clientId = resolveClientId(configuredClientId);
+  const flavor = flavorFor(clientId);
+  const redirectUri = redirectUriFor(flavor);
+  const verifier = base64Url(randomBytes(48));
+
+  if (flavor === "live") {
+    const query = new URLSearchParams({
+      client_id: clientId,
+      response_type: "code",
+      scope: LIVE_SCOPE,
+      redirect_uri: redirectUri,
+      prompt: "select_account"
+    });
+    return { url: `${LIVE_AUTHORIZE}?${query.toString()}`, redirectUri, verifier, flavor };
+  }
+
+  const query = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    scope: AZURE_SCOPE,
+    redirect_uri: redirectUri,
+    response_mode: "query",
+    prompt: "select_account",
+    code_challenge: base64Url(createHash("sha256").update(verifier).digest()),
+    code_challenge_method: "S256"
+  });
+
+  return { url: `${AZURE_AUTHORIZE}?${query.toString()}`, redirectUri, verifier, flavor };
+}
+
+async function postForm<T>(url: string, form: Record<string, string>): Promise<T> {
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json", ...headers },
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(form).toString()
+  });
+
+  const text = await response.text();
+  const parsed = (text ? JSON.parse(text) : {}) as T & { error?: string; error_description?: string };
+
+  if (!response.ok) {
+    throw new AuthError(parsed.error ?? "http", parsed.error_description ?? `${url} returned ${response.status}`);
+  }
+
+  return parsed;
+}
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body)
   });
 
   const text = await response.text();
-  const parsed = text ? (JSON.parse(text) as T & { XErr?: number }) : ({} as T);
+  const parsed = (text ? JSON.parse(text) : {}) as T & { XErr?: number };
 
   if (!response.ok) {
-    const xerr = (parsed as { XErr?: number }).XErr;
+    const xerr = parsed.XErr;
     if (xerr === 2148916233) {
       throw new AuthError(
         "no-xbox-account",
@@ -66,109 +142,70 @@ async function postJson<T>(url: string, body: unknown, headers: Record<string, s
       throw new AuthError("region-blocked", "Xbox Live is not available in this account's region.");
     }
     if (xerr === 2148916238) {
-      throw new AuthError(
-        "child-account",
-        "This is a child account. Add it to a family group before signing in."
-      );
+      throw new AuthError("child-account", "This is a child account. Add it to a family group before signing in.");
     }
-    throw new AuthError("http", `${url} failed with status ${response.status}`);
+    throw new AuthError("http", `${url} returned ${response.status}`);
   }
 
   return parsed;
 }
 
-async function postForm<T>(url: string, form: Record<string, string>): Promise<T> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(form).toString()
-  });
-
-  const parsed = (await response.json()) as T & { error?: string; error_description?: string };
-
-  if (!response.ok && parsed.error) {
-    throw new AuthError(parsed.error, parsed.error_description ?? parsed.error);
-  }
-
-  return parsed;
+interface TokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
 }
 
-export async function requestDeviceCode(clientId: string): Promise<{ prompt: DeviceCodePrompt; deviceCode: string; interval: number }> {
-  const response = await postForm<{
-    device_code: string;
-    user_code: string;
-    verification_uri: string;
-    expires_in: number;
-    interval: number;
-    message: string;
-  }>(DEVICE_CODE_URL, { client_id: clientId, scope: SCOPE });
+export async function exchangeCode(
+  configuredClientId: string,
+  code: string,
+  challenge: AuthChallenge
+): Promise<MicrosoftTokens> {
+  const clientId = resolveClientId(configuredClientId);
+
+  const form: Record<string, string> =
+    challenge.flavor === "live"
+      ? {
+          client_id: clientId,
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: challenge.redirectUri,
+          scope: LIVE_SCOPE
+        }
+      : {
+          client_id: clientId,
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: challenge.redirectUri,
+          scope: AZURE_SCOPE,
+          code_verifier: challenge.verifier
+        };
+
+  const response = await postForm<TokenResponse>(
+    challenge.flavor === "live" ? LIVE_TOKEN : AZURE_TOKEN,
+    form
+  );
 
   return {
-    prompt: {
-      userCode: response.user_code,
-      verificationUri: response.verification_uri,
-      expiresIn: response.expires_in,
-      message: response.message
-    },
-    deviceCode: response.device_code,
-    interval: response.interval
+    accessToken: response.access_token,
+    refreshToken: response.refresh_token ?? "",
+    expiresAt: Date.now() + response.expires_in * 1000
   };
 }
 
-export async function pollForTokens(
-  clientId: string,
-  deviceCode: string,
-  intervalSeconds: number,
-  expiresIn: number,
-  isCancelled: () => boolean
+export async function refreshMicrosoftTokens(
+  configuredClientId: string,
+  refreshToken: string
 ): Promise<MicrosoftTokens> {
-  const deadline = Date.now() + expiresIn * 1000;
-  let wait = Math.max(intervalSeconds, 1) * 1000;
+  const clientId = resolveClientId(configuredClientId);
+  const flavor = flavorFor(clientId);
 
-  while (Date.now() < deadline) {
-    if (isCancelled()) throw new AuthError("cancelled", "Sign-in cancelled");
-
-    await new Promise((resolve) => setTimeout(resolve, wait));
-
-    try {
-      const response = await postForm<{ access_token: string; refresh_token: string; expires_in: number }>(TOKEN_URL, {
-        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-        client_id: clientId,
-        device_code: deviceCode
-      });
-
-      return {
-        accessToken: response.access_token,
-        refreshToken: response.refresh_token,
-        expiresAt: Date.now() + response.expires_in * 1000
-      };
-    } catch (error) {
-      if (!(error instanceof AuthError)) throw error;
-
-      if (error.code === "authorization_pending") continue;
-      if (error.code === "slow_down") {
-        wait += 5000;
-        continue;
-      }
-      if (error.code === "authorization_declined") {
-        throw new AuthError("declined", "Sign-in was declined in the browser");
-      }
-      if (error.code === "expired_token") {
-        throw new AuthError("expired", "The sign-in code expired. Start again.");
-      }
-      throw error;
-    }
-  }
-
-  throw new AuthError("expired", "The sign-in code expired. Start again.");
-}
-
-export async function refreshMicrosoftTokens(clientId: string, refreshToken: string): Promise<MicrosoftTokens> {
-  const response = await postForm<{ access_token: string; refresh_token: string; expires_in: number }>(TOKEN_URL, {
-    grant_type: "refresh_token",
+  const response = await postForm<TokenResponse>(flavor === "live" ? LIVE_TOKEN : AZURE_TOKEN, {
     client_id: clientId,
+    grant_type: "refresh_token",
     refresh_token: refreshToken,
-    scope: SCOPE
+    redirect_uri: redirectUriFor(flavor),
+    scope: flavor === "live" ? LIVE_SCOPE : AZURE_SCOPE
   });
 
   return {
@@ -178,12 +215,15 @@ export async function refreshMicrosoftTokens(clientId: string, refreshToken: str
   };
 }
 
-export async function authenticateWithXbox(microsoftAccessToken: string): Promise<MinecraftSession> {
+export async function authenticateWithXbox(
+  microsoftAccessToken: string,
+  flavor: AuthFlavor
+): Promise<MinecraftSession> {
   const xbl = await postJson<{ Token: string; DisplayClaims: { xui: { uhs: string }[] } }>(XBL_URL, {
     Properties: {
       AuthMethod: "RPS",
       SiteName: "user.auth.xboxlive.com",
-      RpsTicket: `d=${microsoftAccessToken}`
+      RpsTicket: flavor === "live" ? microsoftAccessToken : `d=${microsoftAccessToken}`
     },
     RelyingParty: "http://auth.xboxlive.com",
     TokenType: "JWT"

@@ -1,5 +1,5 @@
 import AdmZip from "adm-zip";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Progress } from "../shared/types";
 import {
@@ -7,7 +7,7 @@ import {
   VERSION_MANIFEST,
   downloadFile,
   fetchJson,
-  isValid,
+  isPresent,
   libraryPath,
   nativeClassifier,
   rulesAllow,
@@ -18,7 +18,6 @@ import {
   type VersionManifest
 } from "./mojang";
 
-const FABRIC_META = "https://meta.fabricmc.net/v2";
 const MAVEN_CENTRAL = "https://libraries.minecraft.net/";
 
 export type ProgressSink = (progress: Progress) => void;
@@ -60,29 +59,6 @@ export async function fetchVanillaJson(gameDir: string, versionId: string): Prom
   return json;
 }
 
-export async function latestFabricLoader(minecraft: string): Promise<string> {
-  const loaders = await fetchJson<{ loader: { version: string; stable: boolean } }[]>(
-    `${FABRIC_META}/versions/loader/${minecraft}`
-  );
-  const stable = loaders.find((l) => l.loader.stable) ?? loaders[0];
-  if (!stable) throw new Error(`Fabric does not support Minecraft ${minecraft} yet`);
-  return stable.loader.version;
-}
-
-export async function installFabric(gameDir: string, minecraft: string): Promise<string> {
-  const loader = await latestFabricLoader(minecraft);
-  const versionId = `fabric-loader-${loader}-${minecraft}`;
-  const target = versionJsonPath(gameDir, versionId);
-
-  if (!existsSync(target)) {
-    const json = await fetchJson<VersionJson>(`${FABRIC_META}/versions/loader/${minecraft}/${loader}/profile/json`);
-    mkdirSync(versionDir(gameDir, versionId), { recursive: true });
-    writeFileSync(target, JSON.stringify(json, null, 2), "utf8");
-  }
-
-  return versionId;
-}
-
 export async function resolveVersionJson(gameDir: string, versionId: string): Promise<VersionJson> {
   const path = versionJsonPath(gameDir, versionId);
   const own = existsSync(path)
@@ -93,7 +69,7 @@ export async function resolveVersionJson(gameDir: string, versionId: string): Pr
 
   const parent = await resolveVersionJson(gameDir, own.inheritsFrom);
 
-  return {
+  const merged: VersionJson = {
     ...parent,
     ...own,
     id: own.id,
@@ -102,59 +78,67 @@ export async function resolveVersionJson(gameDir: string, versionId: string): Pr
     assetIndex: own.assetIndex ?? parent.assetIndex,
     downloads: own.downloads ?? parent.downloads,
     javaVersion: own.javaVersion ?? parent.javaVersion,
+    logging: own.logging ?? parent.logging,
     libraries: [...(own.libraries ?? []), ...(parent.libraries ?? [])],
-    arguments: {
-      game: [...(own.arguments?.game ?? []), ...(parent.arguments?.game ?? [])],
-      jvm: [...(own.arguments?.jvm ?? []), ...(parent.arguments?.jvm ?? [])]
-    },
     minecraftArguments: own.minecraftArguments ?? parent.minecraftArguments
   };
+
+  if (own.arguments || parent.arguments) {
+    merged.arguments = {
+      game: [...(parent.arguments?.game ?? []), ...(own.arguments?.game ?? [])],
+      jvm: [...(parent.arguments?.jvm ?? []), ...(own.arguments?.jvm ?? [])]
+    };
+  } else {
+    delete merged.arguments;
+  }
+
+  return merged;
 }
 
 export function usableLibraries(version: VersionJson): Library[] {
   return version.libraries.filter((lib) => rulesAllow(lib.rules));
 }
 
-export function libraryTargets(gameDir: string, version: VersionJson): { path: string; url: string; sha1?: string; size?: number }[] {
-  const targets: { path: string; url: string; sha1?: string; size?: number }[] = [];
+export function libraryTargets(
+  gameDir: string,
+  version: VersionJson
+): { path: string; url: string; sha1?: string; size?: number }[] {
+  const targets = new Map<string, { path: string; url: string; sha1?: string; size?: number }>();
 
   for (const lib of usableLibraries(version)) {
     const artifact = lib.downloads?.artifact;
 
     if (artifact) {
-      const relative = artifact.path ?? libraryPath(lib.name);
-      targets.push({
-        path: join(gameDir, "libraries", relative),
-        url: artifact.url,
-        sha1: artifact.sha1,
-        size: artifact.size
-      });
+      const path = join(gameDir, "libraries", artifact.path ?? libraryPath(lib.name));
+      if (artifact.url && !targets.has(path)) {
+        targets.set(path, { path, url: artifact.url, sha1: artifact.sha1, size: artifact.size });
+      }
     } else if (!lib.natives) {
-      const relative = libraryPath(lib.name).split("\\").join("/");
+      const relative = libraryPath(lib.name);
+      const path = join(gameDir, "libraries", relative);
       const base = lib.url ?? MAVEN_CENTRAL;
-      targets.push({
-        path: join(gameDir, "libraries", libraryPath(lib.name)),
-        url: `${base.endsWith("/") ? base : `${base}/`}${relative}`
-      });
+      if (!existsSync(path) && !targets.has(path)) {
+        const suffix = relative.split("\\").join("/");
+        targets.set(path, { path, url: `${base.endsWith("/") ? base : `${base}/`}${suffix}` });
+      }
     }
 
     const classifier = nativeClassifier(lib);
     const native = classifier ? lib.downloads?.classifiers?.[classifier] : undefined;
-    if (native) {
-      targets.push({
-        path: join(gameDir, "libraries", native.path ?? libraryPath(`${lib.name}:${classifier}`)),
-        url: native.url,
-        sha1: native.sha1,
-        size: native.size
-      });
+    if (native?.url) {
+      const path = join(gameDir, "libraries", native.path ?? libraryPath(`${lib.name}:${classifier}`));
+      if (!targets.has(path)) {
+        targets.set(path, { path, url: native.url, sha1: native.sha1, size: native.size });
+      }
     }
   }
 
-  return targets;
+  return [...targets.values()];
 }
 
 export async function extractNatives(gameDir: string, version: VersionJson): Promise<void> {
-  const outDir = nativesDir(gameDir, version.id);
+  const outDir = nativesDir(gameDir, version.inheritsFrom ?? version.id);
+  if (existsSync(outDir) && readdirSync(outDir).length > 0) return;
   mkdirSync(outDir, { recursive: true });
 
   for (const lib of usableLibraries(version)) {
@@ -190,7 +174,7 @@ export async function installVersion(
 
   onProgress({ stage: "client", label: `Downloading client ${version.id}`, current: 0, total: 1, done: false });
 
-  const clientJar = versionJarPath(gameDir, version.id);
+  const clientJar = versionJarPath(gameDir, version.inheritsFrom ?? version.id);
   const clientSource = version.downloads?.client;
   if (clientSource) {
     await downloadFile(clientSource.url, clientJar, clientSource.sha1, clientSource.size);
@@ -201,10 +185,12 @@ export async function installVersion(
   onProgress({ stage: "libraries", label: "Downloading libraries", current: 0, total: libs.length, done: false });
 
   await runPool(libs, 12, async (target) => {
-    try {
-      await downloadFile(target.url, target.path, target.sha1, target.size);
-    } catch (error) {
-      if (target.sha1) throw error;
+    if (!isPresent(target.path, target.size)) {
+      try {
+        await downloadFile(target.url, target.path, target.sha1, target.size);
+      } catch (error) {
+        if (target.sha1) throw error;
+      }
     }
     libDone += 1;
     onProgress({
@@ -230,7 +216,7 @@ export async function installVersion(
   await runPool(objects, 16, async ([, object]) => {
     const sub = object.hash.slice(0, 2);
     const target = join(gameDir, "assets", "objects", sub, object.hash);
-    if (!(await isValid(target, object.hash, object.size))) {
+    if (!isPresent(target, object.size)) {
       await downloadFile(`${ASSET_BASE}/${sub}/${object.hash}`, target, object.hash, object.size);
     }
     assetDone += 1;

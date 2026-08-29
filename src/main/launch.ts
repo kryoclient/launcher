@@ -11,15 +11,20 @@ const LAUNCHER_VERSION = "1.0";
 type ArgumentEntry = string | { rules: LibraryRule[]; value: string | string[] };
 
 function classpath(gameDir: string, version: VersionJson): string {
-  const entries: string[] = [];
+  const byArtifact = new Map<string, string>();
 
   for (const lib of usableLibraries(version)) {
-    if (lib.natives) continue;
+    if (lib.natives && !lib.downloads?.artifact) continue;
+
+    const [group, artifact, , classifier] = lib.name.split("@")[0].split(":");
+    const key = classifier ? `${group}:${artifact}:${classifier}` : `${group}:${artifact}`;
+    if (byArtifact.has(key)) continue;
+
     const relative = lib.downloads?.artifact?.path ?? libraryPath(lib.name);
-    const full = join(gameDir, "libraries", relative);
-    if (!entries.includes(full)) entries.push(full);
+    byArtifact.set(key, join(gameDir, "libraries", relative));
   }
 
+  const entries = [...byArtifact.values()];
   entries.push(versionJarPath(gameDir, version.inheritsFrom ?? version.id));
   return entries.join(delimiter);
 }

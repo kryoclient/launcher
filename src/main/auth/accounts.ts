@@ -7,10 +7,12 @@ import {
   AuthError,
   authenticateWithXbox,
   fetchProfile,
+  flavorFor,
   hasGameLicense,
   refreshMicrosoftTokens,
   setActiveCape,
   uploadSkin,
+  type AuthFlavor,
   type MinecraftProfile
 } from "./microsoft";
 
@@ -26,6 +28,7 @@ interface StoredAccount {
   accessToken?: string;
   accessExpiresAt?: number;
   xuid?: string;
+  flavor?: AuthFlavor;
   skinUrl?: string | null;
   capes?: AccountCape[];
   activeCapeId?: string | null;
@@ -194,7 +197,8 @@ export class AccountStore {
     refreshToken: string,
     accessToken: string,
     accessExpiresAt: number,
-    xuid: string
+    xuid: string,
+    flavor: AuthFlavor
   ): Account {
     const uuid = dashedUuid(profile.id);
     const id = `msa:${profile.id}`;
@@ -209,6 +213,7 @@ export class AccountStore {
       accessToken: encrypt(accessToken),
       accessExpiresAt,
       xuid,
+      flavor,
       skinUrl: profile.skins.find((s) => s.state === "ACTIVE")?.url ?? null,
       capes,
       activeCapeId: capes.find((c) => c.active)?.id ?? null,
@@ -239,12 +244,8 @@ export class AccountStore {
     if (!refreshToken) {
       throw new AuthError("reauth", `${account.username} needs to sign in again`);
     }
-    if (!clientId) {
-      throw new AuthError("client-id", "Set an Azure client ID in Settings before using a licensed account");
-    }
-
     const tokens = await refreshMicrosoftTokens(clientId, refreshToken);
-    const session = await authenticateWithXbox(tokens.accessToken);
+    const session = await authenticateWithXbox(tokens.accessToken, account.flavor ?? flavorFor(clientId));
     const profile = await fetchProfile(session.accessToken);
     const capes = profileToCapes(profile);
 

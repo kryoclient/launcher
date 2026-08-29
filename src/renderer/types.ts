@@ -1,8 +1,43 @@
+export type LoaderId = "vanilla" | "fabric" | "quilt" | "forge" | "neoforge" | "optifine";
+
+export interface LoaderInfo {
+  id: LoaderId;
+  name: string;
+  tag: string;
+  pickable: boolean;
+}
+
+export interface LoaderVersion {
+  id: string;
+  label: string;
+  stable: boolean;
+  recommended: boolean;
+}
+
+export interface ReleaseAsset {
+  name: string;
+  sizeMb: number;
+  url: string;
+}
+
+export interface ReleaseEntry {
+  tag: string;
+  version: string;
+  name: string;
+  channel: "stable" | "beta";
+  publishedAt: string;
+  notes: string;
+  url: string;
+  assets: ReleaseAsset[];
+  bundled: boolean;
+}
+
 export interface Profile {
   id: string;
   name: string;
   versionId: string;
-  loader: "vanilla" | "fabric";
+  loader: LoaderId;
+  loaderVersion: string;
   memoryMb: number;
   javaPath: string | null;
   jvmArgs: string;
@@ -109,10 +144,8 @@ export interface JavaInfo {
   managed?: boolean;
 }
 
-export interface DeviceCodePrompt {
-  userCode: string;
-  verificationUri: string;
-  expiresIn: number;
+export interface AuthPhase {
+  phase: "browser" | "exchange";
   message: string;
 }
 
@@ -120,7 +153,7 @@ export interface KryoApi {
   getState(): Promise<LauncherState>;
   addOfflineAccount(username: string): Promise<LauncherState>;
   linkMicrosoft(): Promise<LauncherState>;
-  cancelAuth(): Promise<boolean>;
+  forgetMicrosoftSession(): Promise<boolean>;
   selectAccount(id: string): Promise<LauncherState>;
   removeAccount(id: string): Promise<LauncherState>;
   setSkin(accountId: string, variant: "classic" | "slim"): Promise<LauncherState>;
@@ -132,6 +165,9 @@ export interface KryoApi {
   updateSettings(patch: Partial<Settings>): Promise<LauncherState>;
   listVersions(): Promise<VersionSummary[]>;
   listInstalled(): Promise<InstalledVersion[]>;
+  listLoaders(): Promise<LoaderInfo[]>;
+  listLoaderVersions(loader: LoaderId, minecraft: string): Promise<LoaderVersion[]>;
+  listReleases(refresh: boolean): Promise<ReleaseEntry[]>;
   listJava(): Promise<JavaInfo[]>;
   downloadJava(major: number): Promise<JavaInfo>;
   listServers(): Promise<ServerEntry[]>;
@@ -139,8 +175,8 @@ export interface KryoApi {
   listMods(profileId: string): Promise<ModEntry[]>;
   toggleMod(profileId: string, file: string): Promise<ModEntry[]>;
   deleteMod(profileId: string, file: string): Promise<ModEntry[]>;
-  searchMods(query: string, gameVersion: string): Promise<ModrinthHit[]>;
-  installMod(profileId: string, projectId: string, gameVersion: string): Promise<ModEntry[]>;
+  searchMods(query: string, gameVersion: string, loader: LoaderId): Promise<ModrinthHit[]>;
+  installMod(profileId: string, projectId: string, gameVersion: string, loader: LoaderId): Promise<ModEntry[]>;
   install(profileId: string): Promise<InstalledVersion[]>;
   launch(profileId: string): Promise<boolean>;
   kill(): Promise<boolean>;
@@ -160,7 +196,7 @@ export interface KryoApi {
   checkUpdates(): Promise<UpdateStatus>;
   installUpdate(): Promise<boolean>;
   onUpdateStatus(handler: (status: UpdateStatus) => void): void;
-  onAuthPrompt(handler: (prompt: DeviceCodePrompt) => void): void;
+  onAuthPhase(handler: (phase: AuthPhase) => void): void;
 }
 
 declare global {

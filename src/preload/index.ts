@@ -1,13 +1,17 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
-  DeviceCodePrompt,
+  AuthPhase,
   InstalledVersion,
   JavaInfo,
   LauncherState,
+  LoaderId,
+  LoaderInfo,
+  LoaderVersion,
   ModEntry,
   ModrinthHit,
   Profile,
   Progress,
+  ReleaseEntry,
   ServerEntry,
   ServerStatus,
   Settings,
@@ -21,7 +25,7 @@ const api = {
   addOfflineAccount: (username: string): Promise<LauncherState> =>
     ipcRenderer.invoke("account:addOffline", username),
   linkMicrosoft: (): Promise<LauncherState> => ipcRenderer.invoke("auth:microsoft"),
-  cancelAuth: (): Promise<boolean> => ipcRenderer.invoke("auth:cancel"),
+  forgetMicrosoftSession: (): Promise<boolean> => ipcRenderer.invoke("auth:forget"),
   selectAccount: (id: string): Promise<LauncherState> => ipcRenderer.invoke("account:select", id),
   removeAccount: (id: string): Promise<LauncherState> => ipcRenderer.invoke("account:remove", id),
   setSkin: (accountId: string, variant: "classic" | "slim"): Promise<LauncherState> =>
@@ -39,6 +43,10 @@ const api = {
 
   listVersions: (): Promise<VersionSummary[]> => ipcRenderer.invoke("versions:list"),
   listInstalled: (): Promise<InstalledVersion[]> => ipcRenderer.invoke("versions:installed"),
+  listLoaders: (): Promise<LoaderInfo[]> => ipcRenderer.invoke("loaders:list"),
+  listLoaderVersions: (loader: LoaderId, minecraft: string): Promise<LoaderVersion[]> =>
+    ipcRenderer.invoke("loaders:versions", loader, minecraft),
+  listReleases: (refresh: boolean): Promise<ReleaseEntry[]> => ipcRenderer.invoke("releases:list", refresh),
   listJava: (): Promise<JavaInfo[]> => ipcRenderer.invoke("java:list"),
   downloadJava: (major: number): Promise<JavaInfo> => ipcRenderer.invoke("java:download", major),
   listServers: (): Promise<ServerEntry[]> => ipcRenderer.invoke("servers:list"),
@@ -49,10 +57,14 @@ const api = {
     ipcRenderer.invoke("mods:toggle", profileId, file),
   deleteMod: (profileId: string, file: string): Promise<ModEntry[]> =>
     ipcRenderer.invoke("mods:delete", profileId, file),
-  searchMods: (query: string, gameVersion: string): Promise<ModrinthHit[]> =>
-    ipcRenderer.invoke("mods:search", query, gameVersion),
-  installMod: (profileId: string, projectId: string, gameVersion: string): Promise<ModEntry[]> =>
-    ipcRenderer.invoke("mods:install", profileId, projectId, gameVersion),
+  searchMods: (query: string, gameVersion: string, loader: LoaderId): Promise<ModrinthHit[]> =>
+    ipcRenderer.invoke("mods:search", query, gameVersion, loader),
+  installMod: (
+    profileId: string,
+    projectId: string,
+    gameVersion: string,
+    loader: LoaderId
+  ): Promise<ModEntry[]> => ipcRenderer.invoke("mods:install", profileId, projectId, gameVersion, loader),
 
   install: (profileId: string): Promise<InstalledVersion[]> => ipcRenderer.invoke("game:install", profileId),
   launch: (profileId: string): Promise<boolean> => ipcRenderer.invoke("game:launch", profileId),
@@ -85,8 +97,8 @@ const api = {
   onUpdateStatus: (handler: (status: UpdateStatus) => void): void => {
     ipcRenderer.on("update:status", (_event, status: UpdateStatus) => handler(status));
   },
-  onAuthPrompt: (handler: (prompt: DeviceCodePrompt) => void): void => {
-    ipcRenderer.on("auth:prompt", (_event, prompt: DeviceCodePrompt) => handler(prompt));
+  onAuthPhase: (handler: (phase: AuthPhase) => void): void => {
+    ipcRenderer.on("auth:phase", (_event, phase: AuthPhase) => handler(phase));
   }
 };
 

@@ -1,8 +1,25 @@
+export type LoaderId = "vanilla" | "fabric" | "quilt" | "forge" | "neoforge" | "optifine";
+
+export interface LoaderInfo {
+  id: LoaderId;
+  name: string;
+  tag: string;
+  pickable: boolean;
+}
+
+export interface LoaderVersion {
+  id: string;
+  label: string;
+  stable: boolean;
+  recommended: boolean;
+}
+
 export interface Profile {
   id: string;
   name: string;
   versionId: string;
-  loader: "vanilla" | "fabric";
+  loader: LoaderId;
+  loaderVersion: string;
   memoryMb: number;
   javaPath: string | null;
   jvmArgs: string;
@@ -100,6 +117,7 @@ export type TaskStage =
   | "libraries"
   | "assets"
   | "natives"
+  | "loader"
   | "java"
   | "launching"
   | "running";
@@ -120,10 +138,26 @@ export interface JavaInfo {
   managed?: boolean;
 }
 
-export interface DeviceCodePrompt {
-  userCode: string;
-  verificationUri: string;
-  expiresIn: number;
+export interface ReleaseAsset {
+  name: string;
+  sizeMb: number;
+  url: string;
+}
+
+export interface ReleaseEntry {
+  tag: string;
+  version: string;
+  name: string;
+  channel: "stable" | "beta";
+  publishedAt: string;
+  notes: string;
+  url: string;
+  assets: ReleaseAsset[];
+  bundled: boolean;
+}
+
+export interface AuthPhase {
+  phase: "browser" | "exchange";
   message: string;
 }
 

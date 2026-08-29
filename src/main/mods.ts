@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import type { ModEntry, ModrinthHit } from "../shared/types";
+import type { LoaderId, ModEntry, ModrinthHit } from "../shared/types";
 import { downloadFile, fetchJson } from "./mojang";
 
 const MODRINTH = "https://api.modrinth.com/v2";
@@ -68,8 +68,16 @@ export function deleteMod(gameDir: string, profileId: string, fileName: string):
   return listMods(gameDir, profileId);
 }
 
-export async function searchMods(query: string, gameVersion: string): Promise<ModrinthHit[]> {
-  const facets = JSON.stringify([["project_type:mod"], ["categories:fabric"], [`versions:${gameVersion}`]]);
+function modrinthLoader(loader: LoaderId): string | null {
+  if (loader === "fabric" || loader === "forge" || loader === "neoforge" || loader === "quilt") return loader;
+  return null;
+}
+
+export async function searchMods(query: string, gameVersion: string, loader: LoaderId): Promise<ModrinthHit[]> {
+  const target = modrinthLoader(loader);
+  if (!target) throw new Error("Pick Fabric, Quilt, Forge or NeoForge before browsing mods");
+
+  const facets = JSON.stringify([["project_type:mod"], [`categories:${target}`], [`versions:${gameVersion}`]]);
   const url = `${MODRINTH}/search?query=${encodeURIComponent(query)}&limit=20&index=relevance&facets=${encodeURIComponent(facets)}`;
 
   const response = await fetchJson<SearchResponse>(url);
@@ -89,14 +97,18 @@ export async function installMod(
   gameDir: string,
   profileId: string,
   projectId: string,
-  gameVersion: string
+  gameVersion: string,
+  loader: LoaderId
 ): Promise<ModEntry[]> {
+  const target = modrinthLoader(loader);
+  if (!target) throw new Error("Pick Fabric, Quilt, Forge or NeoForge before installing mods");
+
   const versions = await fetchJson<ProjectVersion[]>(
-    `${MODRINTH}/project/${projectId}/version?loaders=["fabric"]&game_versions=["${gameVersion}"]`
+    `${MODRINTH}/project/${projectId}/version?loaders=["${target}"]&game_versions=["${gameVersion}"]`
   );
 
   const version = versions[0];
-  if (!version) throw new Error(`No Fabric build of this mod for Minecraft ${gameVersion}`);
+  if (!version) throw new Error(`No ${target} build of this mod for Minecraft ${gameVersion}`);
 
   const file = version.files.find((f) => f.primary) ?? version.files[0];
   if (!file) throw new Error("Mod version has no downloadable file");

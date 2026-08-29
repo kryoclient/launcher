@@ -1,0 +1,73 @@
+import type { ReleaseEntry } from "./types";
+
+export const BUNDLED_CHANGELOG: ReleaseEntry[] = [
+  {
+    tag: "v1.0.1",
+    version: "1.0.1",
+    name: "KRYO Client 1.0.1",
+    channel: "stable",
+    publishedAt: "2026-08-29",
+    url: "https://github.com/kryoclient/launcher/releases/tag/v1.0.1",
+    assets: [],
+    bundled: true,
+    notes: [
+      "Loaders, a real version picker, and a Microsoft sign-in that opens a browser window.",
+      "",
+      "## Loaders",
+      "",
+      "- Fabric, Quilt, Forge, NeoForge and OptiFine, each with its own build list per Minecraft version",
+      "- Forge and NeoForge run the official installer end to end, processors included, so 1.13+ builds are patched properly",
+      "- OptiFine is fetched from optifine.net (BMCLAPI as a fallback) and patched against the vanilla jar",
+      "- Every loader remembers the exact build on the profile, or follows the recommended one when you leave it on automatic",
+      "",
+      "## Versions",
+      "",
+      "- The version dropdown is now a searchable picker over the full Mojang manifest, filtered by release, snapshot or old builds",
+      "- Installed versions are marked in the list",
+      "",
+      "## Accounts",
+      "",
+      "- Microsoft sign-in opens the real Microsoft page in a window: pick an account, approve, done. No more typing device codes",
+      "- Works out of the box; an Azure application ID stays optional for anyone who wants their own",
+      "- Sign-out clears the stored browser session so the next login shows the account picker again",
+      "",
+      "## Mods",
+      "",
+      "- Modrinth search follows the profile loader instead of always asking for Fabric builds",
+      "",
+      "## Fixes",
+      "",
+      "- Natives are unpacked into the base version folder, which is where the launch command actually looks for them",
+      "- The classpath keeps one jar per artifact, so loader libraries no longer collide with the vanilla ones",
+      "- Versions that inherit from a pre-1.13 release keep their launch arguments",
+      "- Libraries that a loader builds locally are no longer downloaded and are no longer reported as failures",
+      "",
+      "## Also",
+      "",
+      "- New application icon, on the window, the taskbar and the installer",
+      "- This screen: every release and beta, straight from GitHub"
+    ].join("\n")
+  },
+  {
+    tag: "v1.0.0",
+    version: "1.0.0",
+    name: "KRYO Client 1.0",
+    channel: "stable",
+    publishedAt: "2026-08-24",
+    url: "https://github.com/kryoclient/launcher/releases/tag/v1.0.0",
+    assets: [],
+    bundled: true,
+    notes: [
+      "The first public build.",
+      "",
+      "- Installs any version Mojang lists, verifying every file by sha1",
+      "- Fabric through the official Fabric meta API",
+      "- Finds your Java, or downloads a matching Adoptium runtime",
+      "- Mod browser over Modrinth: install, toggle and remove per profile",
+      "- Offline accounts and Microsoft licences",
+      "- Skins and capes from your Minecraft account",
+      "- Server list pinged for real, SRV records included",
+      "- Unlimited profiles, each with its own version, loader, RAM, JVM flags and window size"
+    ].join("\n")
+  }
+];

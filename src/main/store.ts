@@ -33,6 +33,7 @@ function defaultProfile(): Profile {
     name: "Default",
     versionId: "",
     loader: "vanilla",
+    loaderVersion: "",
     memoryMb: 4096,
     javaPath: null,
     jvmArgs: "-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions",

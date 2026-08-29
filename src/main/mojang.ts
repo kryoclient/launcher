@@ -117,10 +117,11 @@ export function nativeClassifier(library: Library): string | null {
 }
 
 export function libraryPath(name: string): string {
-  const [group, artifact, version, classifier] = name.split(":");
+  const [coordinate, extension = "jar"] = name.split("@");
+  const [group, artifact, version, classifier] = coordinate.split(":");
   const fileName = classifier
-    ? `${artifact}-${version}-${classifier}.jar`
-    : `${artifact}-${version}.jar`;
+    ? `${artifact}-${version}-${classifier}.${extension}`
+    : `${artifact}-${version}.${extension}`;
   return join(...group.split("."), artifact, version, fileName);
 }
 
@@ -132,6 +133,16 @@ export async function fetchJson<T>(url: string): Promise<T> {
 
 export function sha1File(path: string): string {
   return createHash("sha1").update(readFileSync(path)).digest("hex");
+}
+
+export function isPresent(path: string, size?: number): boolean {
+  if (!existsSync(path)) return false;
+  if (size === undefined) return true;
+  try {
+    return statSync(path).size === size;
+  } catch {
+    return false;
+  }
 }
 
 export async function isValid(path: string, expectedSha1?: string, expectedSize?: number): Promise<boolean> {

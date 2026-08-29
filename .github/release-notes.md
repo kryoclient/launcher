@@ -1,4 +1,24 @@
-A free Minecraft launcher: every version from 1.7.10 to the latest snapshot, Fabric in one switch, mods straight from Modrinth, and Java it installs for you.
+Loaders, a real version picker, and a Microsoft sign-in that opens a browser window.
+
+## What is new in VERSION
+
+**Five loaders, not one.** Fabric, Quilt, Forge, NeoForge and OptiFine, each with its own build list per Minecraft version. Forge and NeoForge run the official installer end to end — libraries, extracted data, and every processor — so 1.13+ builds are patched exactly the way the Forge installer patches them. OptiFine is fetched from optifine.net and patched against the vanilla jar. Leave the build on *Recommended* and KRYO follows the loader's own promotion; pick an exact one if you need it pinned.
+
+**A version picker that can be searched.** The dropdown is gone. In its place: the full Mojang manifest, a search box, and filters for release, snapshot, old builds and "installed only".
+
+**Microsoft sign-in without the ceremony.** The real Microsoft page opens in a window — pick an account, approve, done. No device codes to copy, and no Azure application ID to register first. If you would rather use your own app registration, the field is still in Settings; leave it empty and the built-in one is used.
+
+**An Updates screen.** Every release and every beta, pulled from GitHub, with the notes rendered in the launcher. It is where you are reading this from, if you are reading it there.
+
+**A new icon.** On the window, the taskbar and the installer.
+
+### Fixes
+
+- Natives are unpacked into the base version folder — which is where the launch command actually looks for them. Modded profiles on 1.18 and older were pointing at an empty directory.
+- The classpath keeps one jar per artifact, so loader libraries no longer collide with the vanilla ones they replace.
+- Profiles that inherit from a pre-1.13 release keep their launch arguments instead of starting with none.
+- Libraries a loader builds locally are no longer downloaded, and no longer reported as failures.
+- Modrinth search follows the profile loader instead of always asking for Fabric builds.
 
 ## Which file do I download?
 
@@ -13,13 +33,13 @@ A free Minecraft launcher: every version from 1.7.10 to the latest snapshot, Fab
 ## What it does
 
 - Installs any version Mojang lists, verifying every file by sha1
-- Fabric through the official Fabric meta API — flip one switch on a profile
+- Fabric, Quilt, Forge, NeoForge and OptiFine from their official sources
 - Finds your Java, or downloads a matching Adoptium runtime when a version needs one you do not have
-- Mod browser over Modrinth: install, toggle and remove per profile
-- Two kinds of account: an offline nickname, or a Microsoft licence through the official device-code flow (Xbox Live → XSTS → Minecraft services, with an ownership check)
+- Mod browser over Modrinth: install, toggle and remove per profile, matched to the profile's loader
+- Two kinds of account: an offline nickname, or a Microsoft licence through Xbox Live → XSTS → Minecraft services, with an ownership check
 - Skins and capes from your Minecraft account
 - Server list pinged for real, SRV records included
-- Unlimited profiles, each with its own version, loader, RAM, JVM flags and window size
+- Unlimited profiles, each with its own version, loader, loader build, RAM, JVM flags and window size
 
 ## Before you install
 
@@ -31,13 +51,11 @@ certutil -hashfile KryoClient-Setup-VERSION.exe SHA256
 
 and compare against `SHA256SUMS.txt` above. Every build here is produced by GitHub Actions from this repository, on this tag — nothing is uploaded by hand.
 
-**Microsoft sign-in needs your own Azure application ID.** Mojang does not hand out a shared one. Two minutes: portal.azure.com → App registrations → New registration → *Personal Microsoft accounts only* → Authentication → *Allow public client flows* → paste the client ID into Settings. Offline mode works without any of this.
-
 ## Requirements
 
 - 4 GB RAM minimum, 8 GB recommended
 - 2 GB free disk for the launcher and one profile
-- Java 17+ — detected or downloaded by the launcher, nothing to install by hand
+- Java 17+ — detected or downloaded by the launcher, nothing to install by hand. Forge and NeoForge run their installers with that same runtime.
 
 ## Known log noise
 

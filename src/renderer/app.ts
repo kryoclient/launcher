@@ -2,9 +2,12 @@ import type {
   Account,
   InstalledVersion,
   LauncherState,
+  LoaderInfo,
+  LoaderVersion,
   ModEntry,
   ModrinthHit,
   Profile,
+  ReleaseEntry,
   ServerEntry,
   ServerStatus,
   UpdateStatus,
@@ -18,7 +21,14 @@ let versions: VersionSummary[] = [];
 let installed: InstalledVersion[] = [];
 let mods: ModEntry[] = [];
 let servers: ServerEntry[] = [];
+let loaders: LoaderInfo[] = [];
+let loaderBuilds: LoaderVersion[] = [];
+let releases: ReleaseEntry[] = [];
+let releaseChannel: "all" | "stable" | "beta" = "all";
 let authPending = false;
+
+const typeFilters = new Set<string>(["release"]);
+let installedOnly = false;
 
 function $<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -32,6 +42,10 @@ function activeProfile(): Profile | null {
 
 function activeAccount(): Account | null {
   return state.accounts.find((a) => a.id === state.activeAccountId) ?? null;
+}
+
+function loaderName(id: string): string {
+  return loaders.find((loader) => loader.id === id)?.name ?? id;
 }
 
 let toastTimer = 0;
@@ -78,6 +92,7 @@ function switchView(view: string): void {
   if (view === "servers") void refreshServers();
   if (view === "mods") void refreshMods();
   if (view === "settings") void renderJava();
+  if (view === "updates") void refreshReleases(false);
 }
 
 function renderAccountCard(): void {
@@ -97,7 +112,8 @@ function renderAccounts(): void {
   list.innerHTML = "";
 
   if (state.accounts.length === 0) {
-    list.innerHTML = '<p class="empty">No accounts yet. Sign in with Microsoft to use your licence, or add an offline name.</p>';
+    list.innerHTML =
+      '<p class="empty">No accounts yet. Sign in with Microsoft to use your licence, or add an offline name.</p>';
     return;
   }
 
@@ -135,12 +151,11 @@ function renderProfiles(): void {
 
   const profile = activeProfile();
   $("#play-title").textContent = profile
-    ? `${profile.versionId || "Pick a version"}${profile.loader === "fabric" ? " · Fabric" : ""}`
+    ? `${profile.versionId || "Pick a version"}${profile.loader === "vanilla" ? "" : ` · ${loaderName(profile.loader)}`}`
     : "No profile";
 
   if (!profile) return;
 
-  $<HTMLSelectElement>("#loader-select").value = profile.loader;
   $<HTMLInputElement>("#memory-range").value = String(profile.memoryMb);
   $("#memory-value").textContent = `${profile.memoryMb} MB`;
   $<HTMLInputElement>("#jvm-args").value = profile.jvmArgs;
@@ -150,28 +165,138 @@ function renderProfiles(): void {
   $("#stat-played").textContent = profile.lastPlayed ? new Date(profile.lastPlayed).toLocaleDateString() : "never";
 }
 
-function renderVersions(): void {
-  const select = $<HTMLSelectElement>("#version-select");
-  const profile = activeProfile();
-  select.innerHTML = "";
+function isInstalled(versionId: string): boolean {
+  return installed.some((entry) => entry.id === versionId || entry.id.endsWith(`-${versionId}`));
+}
 
-  for (const version of versions) {
-    const option = document.createElement("option");
-    option.value = version.id;
-    const isInstalled = installed.some((i) => i.id === version.id || i.id.endsWith(`-${version.id}`));
-    option.textContent = `${version.id}${isInstalled ? "  ✓" : ""}`;
-    option.selected = profile?.versionId === version.id;
-    select.appendChild(option);
-  }
+function versionType(version: VersionSummary): string {
+  if (version.type === "release" || version.type === "snapshot") return version.type;
+  return "old";
+}
+
+function renderVersionTrigger(): void {
+  const profile = activeProfile();
+  const current = profile?.versionId ?? "";
+  $("#version-current").textContent = current || "Pick a version";
+
+  const summary = versions.find((version) => version.id === current);
+  const bits: string[] = [];
+  if (summary) bits.push(versionType(summary));
+  if (current && isInstalled(current)) bits.push("installed");
+  $("#version-meta").textContent = bits.join(" · ");
 
   $("#stat-installed").textContent = String(installed.length);
 }
 
+function renderVersionList(): void {
+  const list = $("#version-list");
+  const query = $<HTMLInputElement>("#version-search").value.trim().toLowerCase();
+  const profile = activeProfile();
+
+  const matches = versions.filter((version) => {
+    if (installedOnly && !isInstalled(version.id)) return false;
+    if (typeFilters.size > 0 && !typeFilters.has(versionType(version))) return false;
+    if (query && !version.id.toLowerCase().includes(query)) return false;
+    return true;
+  });
+
+  list.innerHTML = "";
+
+  if (matches.length === 0) {
+    list.innerHTML = '<p class="empty">Nothing matches those filters.</p>';
+    return;
+  }
+
+  for (const version of matches.slice(0, 400)) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `picker-row${version.id === profile?.versionId ? " current" : ""}`;
+    row.dataset.version = version.id;
+    row.innerHTML = `
+      <span class="picker-id">${version.id}</span>
+      <span class="picker-type">${versionType(version)}</span>
+      <span class="picker-date mono">${version.releaseTime.slice(0, 10)}</span>
+      <span class="picker-mark">${isInstalled(version.id) ? "installed" : ""}</span>`;
+    list.appendChild(row);
+  }
+
+  if (matches.length > 400) {
+    const note = document.createElement("p");
+    note.className = "empty";
+    note.textContent = `${matches.length - 400} more — narrow the search to see them.`;
+    list.appendChild(note);
+  }
+}
+
+function renderLoaderRow(): void {
+  const row = $("#loader-row");
+  const profile = activeProfile();
+  row.innerHTML = "";
+
+  for (const loader of loaders) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `loader-chip${profile?.loader === loader.id ? " active" : ""}`;
+    button.dataset.loader = loader.id;
+    button.innerHTML = `<span>${loader.name}</span><span class="loader-tag">${loader.tag}</span>`;
+    row.appendChild(button);
+  }
+}
+
+async function refreshLoaderBuilds(): Promise<void> {
+  const field = $("#loader-build-field");
+  const select = $<HTMLSelectElement>("#loader-build");
+  const profile = activeProfile();
+
+  if (!profile || profile.loader === "vanilla" || !profile.versionId) {
+    field.hidden = true;
+    loaderBuilds = [];
+    return;
+  }
+
+  field.hidden = false;
+  select.disabled = true;
+  select.innerHTML = '<option value="">Loading builds…</option>';
+
+  try {
+    loaderBuilds = await api.listLoaderVersions(profile.loader, profile.versionId);
+  } catch (error) {
+    loaderBuilds = [];
+    select.innerHTML = `<option value="">${errorMessage(error)}</option>`;
+    return;
+  }
+
+  select.innerHTML = "";
+
+  if (loaderBuilds.length === 0) {
+    select.innerHTML = `<option value="">${loaderName(profile.loader)} has no build for ${profile.versionId}</option>`;
+    return;
+  }
+
+  const auto = document.createElement("option");
+  auto.value = "";
+  auto.textContent = `Recommended · ${loaderBuilds.find((b) => b.recommended)?.label ?? loaderBuilds[0].label}`;
+  select.appendChild(auto);
+
+  for (const build of loaderBuilds) {
+    const option = document.createElement("option");
+    option.value = build.id;
+    const marks = [build.recommended ? "recommended" : "", build.stable ? "" : "beta"].filter(Boolean);
+    option.textContent = marks.length > 0 ? `${build.label} · ${marks.join(" · ")}` : build.label;
+    option.selected = profile.loaderVersion === build.id;
+    select.appendChild(option);
+  }
+
+  select.disabled = false;
+}
+
 function renderMods(): void {
   const container = $("#mods-installed");
+  const profile = activeProfile();
   container.innerHTML = "";
   $("#mods-count").textContent = String(mods.length);
   $("#stat-mods").textContent = String(mods.filter((m) => m.enabled).length);
+  $("#mods-eyebrow").textContent = profile ? `${loaderName(profile.loader).toLowerCase()} mods` : "mods";
 
   if (mods.length === 0) {
     container.innerHTML =
@@ -332,6 +457,194 @@ async function refreshServers(): Promise<void> {
   );
 }
 
+function inlineInto(parent: HTMLElement, text: string): void {
+  const pattern = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\((https?:\/\/[^)\s]+)\))/g;
+  let index = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const at = match.index ?? 0;
+    if (at > index) parent.appendChild(document.createTextNode(text.slice(index, at)));
+
+    const token = match[0];
+    if (token.startsWith("**")) {
+      const strong = document.createElement("strong");
+      strong.textContent = token.slice(2, -2);
+      parent.appendChild(strong);
+    } else if (token.startsWith("`")) {
+      const code = document.createElement("code");
+      code.textContent = token.slice(1, -1);
+      parent.appendChild(code);
+    } else {
+      const label = token.slice(1, token.indexOf("]"));
+      const href = match[2];
+      const link = document.createElement("button");
+      link.type = "button";
+      link.className = "link inline";
+      link.textContent = label;
+      link.dataset.href = href;
+      parent.appendChild(link);
+    }
+
+    index = at + token.length;
+  }
+
+  if (index < text.length) parent.appendChild(document.createTextNode(text.slice(index)));
+}
+
+function renderNotes(container: HTMLElement, markdown: string): void {
+  const lines = markdown.split("\n");
+  let list: HTMLUListElement | null = null;
+  let table: HTMLTableElement | null = null;
+  let paragraph: HTMLParagraphElement | null = null;
+
+  const closeBlocks = (): void => {
+    list = null;
+    table = null;
+    paragraph = null;
+  };
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+
+    if (line.trim() === "") {
+      closeBlocks();
+      continue;
+    }
+
+    if (line.startsWith("#")) {
+      closeBlocks();
+      const heading = document.createElement("h3");
+      heading.textContent = line.replace(/^#+\s*/, "");
+      container.appendChild(heading);
+      continue;
+    }
+
+    if (/^\s*[-*]\s+/.test(line)) {
+      table = null;
+      paragraph = null;
+      if (!list) {
+        list = document.createElement("ul");
+        container.appendChild(list);
+      }
+      const item = document.createElement("li");
+      inlineInto(item, line.replace(/^\s*[-*]\s+/, ""));
+      list.appendChild(item);
+      continue;
+    }
+
+    if (line.trim().startsWith("|")) {
+      list = null;
+      paragraph = null;
+      const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
+      if (cells.every((cell) => /^:?-{2,}:?$/.test(cell))) continue;
+
+      if (!table) {
+        table = document.createElement("table");
+        table.className = "notes-table";
+        container.appendChild(table);
+      }
+
+      const row = document.createElement("tr");
+      for (const cell of cells) {
+        const node = document.createElement(table.rows.length === 0 ? "th" : "td");
+        inlineInto(node, cell);
+        row.appendChild(node);
+      }
+      table.appendChild(row);
+      continue;
+    }
+
+    list = null;
+    table = null;
+
+    if (!paragraph) {
+      paragraph = document.createElement("p");
+      container.appendChild(paragraph);
+    } else {
+      paragraph.appendChild(document.createTextNode(" "));
+    }
+    inlineInto(paragraph, line.trim());
+  }
+}
+
+function renderReleases(): void {
+  const container = $("#release-list");
+  container.innerHTML = "";
+
+  const visible = releases.filter((entry) => releaseChannel === "all" || entry.channel === releaseChannel);
+
+  if (visible.length === 0) {
+    container.innerHTML = '<p class="empty">No releases in this channel yet.</p>';
+    return;
+  }
+
+  for (const entry of visible) {
+    const card = document.createElement("article");
+    card.className = "release";
+
+    const head = document.createElement("header");
+    head.className = "release-head";
+
+    const title = document.createElement("h2");
+    title.textContent = entry.name;
+    head.appendChild(title);
+
+    const badge = document.createElement("span");
+    badge.className = `release-badge ${entry.channel}`;
+    badge.textContent = entry.channel === "beta" ? "beta" : "release";
+    head.appendChild(badge);
+
+    const date = document.createElement("span");
+    date.className = "release-date mono";
+    date.textContent = entry.publishedAt || "unreleased";
+    head.appendChild(date);
+
+    card.appendChild(head);
+
+    const notes = document.createElement("div");
+    notes.className = "release-notes";
+    if (entry.notes) renderNotes(notes, entry.notes);
+    else notes.innerHTML = '<p class="empty">No notes for this build.</p>';
+    card.appendChild(notes);
+
+    const footer = document.createElement("footer");
+    footer.className = "release-foot";
+
+    for (const asset of entry.assets) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip";
+      chip.dataset.href = asset.url;
+      chip.textContent = `${asset.name} · ${asset.sizeMb} MB`;
+      footer.appendChild(chip);
+    }
+
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "link";
+    open.dataset.href = entry.url;
+    open.textContent = entry.bundled ? "open the tag on GitHub" : "open on GitHub";
+    footer.appendChild(open);
+
+    card.appendChild(footer);
+    container.appendChild(card);
+  }
+}
+
+async function refreshReleases(force: boolean): Promise<void> {
+  if (releases.length === 0) {
+    $("#release-list").innerHTML = '<p class="empty">Loading the release history…</p>';
+  }
+
+  try {
+    releases = await api.listReleases(force);
+  } catch (error) {
+    toast(errorMessage(error), true);
+  }
+
+  renderReleases();
+}
+
 function renderSettings(): void {
   $<HTMLInputElement>("#game-dir").value = state.settings.gameDir;
   $<HTMLInputElement>("#azure-id").value = state.settings.azureClientId;
@@ -386,7 +699,8 @@ function renderAll(): void {
   renderProfiles();
   renderSettings();
   renderCapes();
-  renderVersions();
+  renderLoaderRow();
+  renderVersionTrigger();
 }
 
 async function apply(next: Promise<LauncherState>): Promise<void> {
@@ -411,6 +725,12 @@ function bindNavigation(): void {
       const view = item.dataset.view;
       if (view) switchView(view);
     });
+  });
+
+  document.body.addEventListener("click", (event) => {
+    const link = (event.target as HTMLElement).closest<HTMLElement>("[data-href]");
+    if (!link?.dataset.href) return;
+    void api.openExternal(link.dataset.href);
   });
 }
 
@@ -441,10 +761,11 @@ function bindAccounts(): void {
   $("#add-microsoft").addEventListener("click", async () => {
     if (authPending) return;
     authPending = true;
+
     $("#auth-error").textContent = "";
-    $("#auth-title").textContent = "Contacting Microsoft";
-    $("#auth-text").textContent = "Requesting a sign-in code…";
-    $("#auth-code").textContent = "————";
+    $("#auth-dismiss").classList.add("hidden");
+    $("#auth-title").textContent = "Opening Microsoft";
+    $("#auth-text").textContent = "A Microsoft window is opening. Pick the account that owns Minecraft.";
     $("#auth-overlay").classList.remove("hidden");
 
     try {
@@ -452,28 +773,25 @@ function bindAccounts(): void {
       $("#auth-overlay").classList.add("hidden");
       toast("Microsoft account linked");
     } catch (error) {
-      $("#auth-title").textContent = "Sign-in failed";
-      $("#auth-error").textContent = errorMessage(error);
+      const message = errorMessage(error);
+      if (/cancel|closed/i.test(message)) {
+        $("#auth-overlay").classList.add("hidden");
+      } else {
+        $("#auth-title").textContent = "Sign-in failed";
+        $("#auth-text").textContent = "Nothing was saved. You can try again.";
+        $("#auth-error").textContent = message;
+        $("#auth-dismiss").classList.remove("hidden");
+      }
     } finally {
       authPending = false;
     }
   });
 
-  $("#auth-cancel").addEventListener("click", async () => {
-    await api.cancelAuth();
-    $("#auth-overlay").classList.add("hidden");
-    authPending = false;
-  });
+  $("#auth-dismiss").addEventListener("click", () => $("#auth-overlay").classList.add("hidden"));
 
-  $("#auth-open").addEventListener("click", () => {
-    const uri = $("#auth-open").dataset.uri;
-    if (uri) void api.openExternal(uri);
-  });
-
-  $("#auth-copy").addEventListener("click", async () => {
-    const code = $("#auth-code").textContent ?? "";
-    await api.copy(code);
-    toast("Code copied");
+  $("#auth-forget").addEventListener("click", async () => {
+    await api.forgetMicrosoftSession();
+    toast("Microsoft browser session cleared");
   });
 
   $("#account-list").addEventListener("click", async (event) => {
@@ -498,15 +816,75 @@ async function patchProfile(patch: Partial<Profile>): Promise<void> {
   await apply(api.updateProfile(profile.id, patch));
 }
 
+function bindVersionPicker(): void {
+  const overlay = $("#version-overlay");
+
+  const open = (): void => {
+    overlay.classList.remove("hidden");
+    renderVersionList();
+    $<HTMLInputElement>("#version-search").focus();
+  };
+
+  $("#version-trigger").addEventListener("click", open);
+  $("#version-close").addEventListener("click", () => overlay.classList.add("hidden"));
+
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) overlay.classList.add("hidden");
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") overlay.classList.add("hidden");
+  });
+
+  $<HTMLInputElement>("#version-search").addEventListener("input", () => renderVersionList());
+
+  $("#version-filters").addEventListener("click", (event) => {
+    const chip = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-vtype]");
+    if (!chip) return;
+
+    const type = chip.dataset.vtype ?? "";
+
+    if (type === "installed") {
+      installedOnly = !installedOnly;
+      chip.classList.toggle("on", installedOnly);
+    } else if (typeFilters.has(type)) {
+      typeFilters.delete(type);
+      chip.classList.remove("on");
+    } else {
+      typeFilters.add(type);
+      chip.classList.add("on");
+    }
+
+    renderVersionList();
+  });
+
+  $("#version-list").addEventListener("click", async (event) => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>("[data-version]");
+    if (!row?.dataset.version) return;
+
+    overlay.classList.add("hidden");
+    await patchProfile({ versionId: row.dataset.version, loaderVersion: "" });
+    await refreshLoaderBuilds();
+    await refreshMods();
+  });
+}
+
 function bindPlayView(): void {
   $<HTMLSelectElement>("#profile-select").addEventListener("change", async (event) => {
     await apply(api.selectProfile((event.target as HTMLSelectElement).value));
+    await refreshLoaderBuilds();
     await refreshMods();
   });
 
   $("#profile-new").addEventListener("click", async () => {
-    const version = $<HTMLSelectElement>("#version-select").value || versions[0]?.id || "";
-    await apply(api.createProfile({ name: `Profile ${state.profiles.length + 1}`, versionId: version }));
+    const profile = activeProfile();
+    await apply(
+      api.createProfile({
+        name: `Profile ${state.profiles.length + 1}`,
+        versionId: profile?.versionId ?? versions[0]?.id ?? ""
+      })
+    );
+    await refreshLoaderBuilds();
   });
 
   $("#profile-delete").addEventListener("click", async () => {
@@ -517,14 +895,19 @@ function bindPlayView(): void {
       return;
     }
     await apply(api.deleteProfile(profile.id));
+    await refreshLoaderBuilds();
   });
 
-  $<HTMLSelectElement>("#version-select").addEventListener("change", (event) => {
-    void patchProfile({ versionId: (event.target as HTMLSelectElement).value });
+  $("#loader-row").addEventListener("click", async (event) => {
+    const chip = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-loader]");
+    if (!chip?.dataset.loader) return;
+
+    await patchProfile({ loader: chip.dataset.loader as Profile["loader"], loaderVersion: "" });
+    await refreshLoaderBuilds();
   });
 
-  $<HTMLSelectElement>("#loader-select").addEventListener("change", (event) => {
-    void patchProfile({ loader: (event.target as HTMLSelectElement).value as Profile["loader"] });
+  $<HTMLSelectElement>("#loader-build").addEventListener("change", (event) => {
+    void patchProfile({ loaderVersion: (event.target as HTMLSelectElement).value });
   });
 
   const memory = $<HTMLInputElement>("#memory-range");
@@ -573,7 +956,7 @@ function bindPlayView(): void {
       $("#kill-button").classList.remove("hidden");
       button.textContent = "Running";
       installed = await api.listInstalled();
-      renderVersions();
+      renderVersionTrigger();
     } catch (error) {
       toast(errorMessage(error), true);
       setProgress("Failed", 0, 1);
@@ -594,7 +977,7 @@ function bindPlayView(): void {
 
     try {
       installed = await api.install(profile.id);
-      renderVersions();
+      renderVersionTrigger();
       toast(`${profile.versionId} is ready`);
     } catch (error) {
       toast(errorMessage(error), true);
@@ -631,9 +1014,9 @@ function bindModsView(): void {
     $("#mods-results").innerHTML = '<p class="empty">Searching…</p>';
 
     try {
-      renderResults(await api.searchMods(query, profile.versionId));
+      renderResults(await api.searchMods(query, profile.versionId, profile.loader));
     } catch (error) {
-      $("#mods-results").innerHTML = '<p class="empty">Search failed. Check your connection.</p>';
+      $("#mods-results").innerHTML = '<p class="empty">Search failed.</p>';
       toast(errorMessage(error), true);
     }
   };
@@ -650,7 +1033,7 @@ function bindModsView(): void {
 
     target.textContent = "…";
     try {
-      mods = await api.installMod(profile.id, target.dataset.install ?? "", profile.versionId);
+      mods = await api.installMod(profile.id, target.dataset.install ?? "", profile.versionId, profile.loader);
       renderMods();
       toast("Mod installed");
       target.textContent = "done";
@@ -722,13 +1105,29 @@ function bindServers(): void {
   });
 }
 
+function bindReleases(): void {
+  $("#releases-refresh").addEventListener("click", () => void refreshReleases(true));
+
+  $("#channel-row").addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-channel]");
+    if (!button) return;
+
+    releaseChannel = (button.dataset.channel ?? "all") as typeof releaseChannel;
+    document.querySelectorAll<HTMLElement>("#channel-row [data-channel]").forEach((item) => {
+      item.classList.toggle("active", item === button);
+    });
+
+    renderReleases();
+  });
+}
+
 function bindSettings(): void {
   $("#game-dir-pick").addEventListener("click", async () => {
     const folder = await api.pickFolder();
     if (!folder) return;
     await apply(api.updateSettings({ gameDir: folder }));
     installed = await api.listInstalled();
-    renderVersions();
+    renderVersionTrigger();
   });
 
   $("#java-pick").addEventListener("click", async () => {
@@ -769,9 +1168,10 @@ function bindSettings(): void {
   });
 
   $<HTMLInputElement>("#opt-snapshots").addEventListener("change", async (event) => {
-    await apply(api.updateSettings({ showSnapshots: (event.target as HTMLInputElement).checked }));
-    versions = await api.listVersions();
-    renderVersions();
+    const enabled = (event.target as HTMLInputElement).checked;
+    await apply(api.updateSettings({ showSnapshots: enabled }));
+    applySnapshotFilter(enabled);
+    renderVersionList();
   });
 
   $<HTMLInputElement>("#opt-keep-open").addEventListener("change", async (event) => {
@@ -783,6 +1183,17 @@ function bindSettings(): void {
   });
 
   $("#open-logs").addEventListener("click", () => void api.openLogs());
+}
+
+function applySnapshotFilter(enabled: boolean): void {
+  if (enabled) typeFilters.add("snapshot");
+  else typeFilters.delete("snapshot");
+
+  document.querySelectorAll<HTMLElement>("#version-filters [data-vtype]").forEach((chip) => {
+    const type = chip.dataset.vtype ?? "";
+    if (type === "installed") chip.classList.toggle("on", installedOnly);
+    else chip.classList.toggle("on", typeFilters.has(type));
+  });
 }
 
 function renderUpdate(status: UpdateStatus): void {
@@ -801,6 +1212,7 @@ function renderUpdate(status: UpdateStatus): void {
 
   text.textContent = labels[status.state];
   install.classList.toggle("hidden", status.state !== "ready");
+  if (status.version) $("#titlebar-version").textContent = status.version;
 }
 
 function bindUpdates(): void {
@@ -827,11 +1239,9 @@ function bindGameEvents(): void {
     appendLog(`\nprocess exited with code ${code}\n`);
   });
 
-  api.onAuthPrompt((prompt) => {
-    $("#auth-title").textContent = "Enter this code";
-    $("#auth-text").textContent = `Open ${prompt.verificationUri} and sign in with the Microsoft account that owns Minecraft.`;
-    $("#auth-code").textContent = prompt.userCode;
-    $("#auth-open").dataset.uri = prompt.verificationUri;
+  api.onAuthPhase((phase) => {
+    $("#auth-title").textContent = phase.phase === "browser" ? "Waiting for Microsoft" : "Almost there";
+    $("#auth-text").textContent = phase.message;
   });
 }
 
@@ -839,39 +1249,49 @@ async function boot(): Promise<void> {
   bindWindowControls();
   bindNavigation();
   bindAccounts();
+  bindVersionPicker();
   bindPlayView();
   bindModsView();
   bindCapes();
   bindServers();
+  bindReleases();
   bindSettings();
   bindGameEvents();
   bindUpdates();
 
   state = await api.getState();
+
+  try {
+    loaders = await api.listLoaders();
+  } catch {
+    loaders = [];
+  }
+
   renderAll();
+  applySnapshotFilter(state.settings.showSnapshots);
 
   setProgress("Loading version list", 0, 1);
 
   try {
     versions = await api.listVersions();
     installed = await api.listInstalled();
-    renderVersions();
 
     const profile = activeProfile();
-    if (profile && !profile.versionId && versions.length > 0) {
-      await patchProfile({ versionId: versions[0].id });
+    if (profile && !profile.versionId) {
+      const first = versions.find((version) => version.type === "release") ?? versions[0];
+      if (first) await patchProfile({ versionId: first.id });
     }
 
+    renderVersionTrigger();
     setProgress("Ready", 0, 1);
   } catch (error) {
     setProgress("Offline — version list unavailable", 0, 1);
     toast(errorMessage(error), true);
   }
 
+  await refreshLoaderBuilds();
   await refreshMods();
   await renderJava();
-
-  renderUpdate(await api.updateStatus());
 
   renderUpdate(await api.updateStatus());
 
