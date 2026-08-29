@@ -11,6 +11,7 @@ publish:
   provider: github
   owner: kryoclient
   repo: launcher
+  releaseType: release
 win:
   target:
     - target: nsis
