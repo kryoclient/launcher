@@ -2,6 +2,7 @@ import AdmZip from "adm-zip";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Progress } from "../shared/types";
+import { cacheDir, flushVerificationCache, openVerificationCache } from "./verify";
 import {
   ASSET_BASE,
   VERSION_MANIFEST,
@@ -19,8 +20,49 @@ import {
 } from "./mojang";
 
 const MAVEN_CENTRAL = "https://libraries.minecraft.net/";
+const ASSET_SAMPLE = 24;
 
 export type ProgressSink = (progress: Progress) => void;
+
+function assetStampPath(gameDir: string, indexId: string): string {
+  return join(cacheDir(gameDir), `assets-${indexId}.json`);
+}
+
+function assetsComplete(
+  gameDir: string,
+  indexId: string,
+  indexSha1: string,
+  objects: [string, { hash: string; size: number }][]
+): boolean {
+  const stampPath = assetStampPath(gameDir, indexId);
+  if (!existsSync(stampPath)) return false;
+
+  try {
+    const stamp = JSON.parse(readFileSync(stampPath, "utf8")) as { sha1?: string; objects?: number };
+    if (stamp.sha1 !== indexSha1 || stamp.objects !== objects.length) return false;
+  } catch {
+    return false;
+  }
+
+  const step = Math.max(1, Math.floor(objects.length / ASSET_SAMPLE));
+
+  for (let i = 0; i < objects.length; i += step) {
+    const object = objects[i][1];
+    const sub = object.hash.slice(0, 2);
+    if (!isPresent(join(gameDir, "assets", "objects", sub, object.hash), object.size)) return false;
+  }
+
+  return true;
+}
+
+function rememberAssets(gameDir: string, indexId: string, indexSha1: string, objects: number): void {
+  try {
+    mkdirSync(cacheDir(gameDir), { recursive: true });
+    writeFileSync(assetStampPath(gameDir, indexId), JSON.stringify({ sha1: indexSha1, objects }), "utf8");
+  } catch {
+    return;
+  }
+}
 
 export function versionDir(gameDir: string, versionId: string): string {
   return join(gameDir, "versions", versionId);
@@ -166,8 +208,11 @@ export async function extractNatives(gameDir: string, version: VersionJson): Pro
 export async function installVersion(
   gameDir: string,
   versionId: string,
-  onProgress: ProgressSink
+  onProgress: ProgressSink,
+  options: { verify?: boolean } = {}
 ): Promise<VersionJson> {
+  openVerificationCache(gameDir);
+
   onProgress({ stage: "manifest", label: "Reading version manifest", current: 0, total: 1, done: false });
 
   const version = await resolveVersionJson(gameDir, versionId);
@@ -210,26 +255,39 @@ export async function installVersion(
   const index = JSON.parse(readFileSync(indexPath, "utf8")) as AssetIndex;
 
   const objects = Object.entries(index.objects);
-  let assetDone = 0;
-  onProgress({ stage: "assets", label: "Downloading assets", current: 0, total: objects.length, done: false });
 
-  await runPool(objects, 16, async ([, object]) => {
-    const sub = object.hash.slice(0, 2);
-    const target = join(gameDir, "assets", "objects", sub, object.hash);
-    if (!isPresent(target, object.size)) {
-      await downloadFile(`${ASSET_BASE}/${sub}/${object.hash}`, target, object.hash, object.size);
-    }
-    assetDone += 1;
-    if (assetDone % 25 === 0 || assetDone === objects.length) {
-      onProgress({
-        stage: "assets",
-        label: "Downloading assets",
-        current: assetDone,
-        total: objects.length,
-        done: false
-      });
-    }
-  });
+  if (!options.verify && assetsComplete(gameDir, version.assetIndex.id, version.assetIndex.sha1, objects)) {
+    onProgress({
+      stage: "assets",
+      label: "Assets already installed",
+      current: objects.length,
+      total: objects.length,
+      done: false
+    });
+  } else {
+    let assetDone = 0;
+    onProgress({ stage: "assets", label: "Downloading assets", current: 0, total: objects.length, done: false });
+
+    await runPool(objects, 16, async ([, object]) => {
+      const sub = object.hash.slice(0, 2);
+      const target = join(gameDir, "assets", "objects", sub, object.hash);
+      if (!isPresent(target, object.size)) {
+        await downloadFile(`${ASSET_BASE}/${sub}/${object.hash}`, target, object.hash, object.size);
+      }
+      assetDone += 1;
+      if (assetDone % 25 === 0 || assetDone === objects.length) {
+        onProgress({
+          stage: "assets",
+          label: "Downloading assets",
+          current: assetDone,
+          total: objects.length,
+          done: false
+        });
+      }
+    });
+
+    rememberAssets(gameDir, version.assetIndex.id, version.assetIndex.sha1, objects.length);
+  }
 
   if (version.logging?.client?.file) {
     const logFile = version.logging.client.file;
@@ -240,6 +298,8 @@ export async function installVersion(
       logFile.size
     );
   }
+
+  flushVerificationCache();
 
   onProgress({ stage: "idle", label: "Ready", current: 1, total: 1, done: true });
   return version;

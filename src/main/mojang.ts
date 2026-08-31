@@ -4,6 +4,7 @@ import { readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { cachedSha1, rememberSha1 } from "./verify";
 
 export const VERSION_MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 export const ASSET_BASE = "https://resources.download.minecraft.net";
@@ -132,7 +133,21 @@ export async function fetchJson<T>(url: string): Promise<T> {
 }
 
 export function sha1File(path: string): string {
-  return createHash("sha1").update(readFileSync(path)).digest("hex");
+  const cached = cachedSha1(path);
+  if (cached) return cached;
+
+  const digest = createHash("sha1").update(readFileSync(path)).digest("hex");
+  rememberSha1(path, digest);
+  return digest;
+}
+
+export async function sha1Of(path: string): Promise<string> {
+  const cached = cachedSha1(path);
+  if (cached) return cached;
+
+  const digest = createHash("sha1").update(await readFile(path)).digest("hex");
+  rememberSha1(path, digest);
+  return digest;
 }
 
 export function isPresent(path: string, size?: number): boolean {
@@ -156,8 +171,7 @@ export async function isValid(path: string, expectedSha1?: string, expectedSize?
   }
   if (!expectedSha1) return true;
   try {
-    const buffer = await readFile(path);
-    return createHash("sha1").update(buffer).digest("hex") === expectedSha1;
+    return (await sha1Of(path)) === expectedSha1;
   } catch {
     return false;
   }
@@ -175,7 +189,7 @@ export async function downloadFile(url: string, target: string, sha1?: string, s
   await pipeline(Readable.fromWeb(response.body as never), createWriteStream(temp));
 
   if (sha1) {
-    const actual = sha1File(temp);
+    const actual = createHash("sha1").update(readFileSync(temp)).digest("hex");
     if (actual !== sha1) {
       await rm(temp, { force: true });
       throw new Error(`Checksum mismatch for ${url}`);
@@ -183,6 +197,7 @@ export async function downloadFile(url: string, target: string, sha1?: string, s
   }
 
   await rename(temp, target);
+  if (sha1) rememberSha1(target, sha1);
 }
 
 export async function runPool<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {

@@ -3,6 +3,7 @@ import { resolveVersionJson } from "../install";
 import { fabricLikeVersions, installFabricLike } from "./fabric";
 import { forgeVersions, installForgeLike, neoforgeVersions } from "./forge";
 import { ensureBaseJar, installOptifine, optifineVersions } from "./optifine";
+import { openVerificationCache } from "../verify";
 
 export const LOADERS: LoaderInfo[] = [
   { id: "vanilla", name: "Vanilla", tag: "no mods", pickable: false },
@@ -72,6 +73,8 @@ export async function prepareLoader(options: {
   onProgress: (progress: Progress) => void;
 }): Promise<string> {
   const { loader, gameDir, minecraft, requireJava, onProgress } = options;
+
+  openVerificationCache(gameDir);
 
   if (loader === "vanilla") return minecraft;
 

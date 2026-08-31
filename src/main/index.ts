@@ -35,6 +35,7 @@ import { listReleases } from "./releases";
 import { pingAll } from "./serverPing";
 import { Store } from "./store";
 import { checkForUpdates, currentUpdateStatus, installUpdate } from "./updater";
+import { flushVerificationCache, openVerificationCache } from "./verify";
 
 const POPULAR_SERVERS: ServerEntry[] = [
   { name: "Hypixel", address: "mc.hypixel.net", tag: "minigames · skyblock" },
@@ -327,8 +328,11 @@ function registerHandlers(): void {
   ipcMain.handle("game:install", async (_event, profileId: string) => {
     const profile = requireProfile(profileId);
     const versionId = await prepareProfile(profile);
-    const version = await installVersion(store.gameDir(), versionId, (progress: Progress) =>
-      send("game:progress", progress)
+    const version = await installVersion(
+      store.gameDir(),
+      versionId,
+      (progress: Progress) => send("game:progress", progress),
+      { verify: true }
     );
     await resolveJavaPath(profile, version.javaVersion?.majorVersion ?? 8);
     return installedVersions();
@@ -437,6 +441,7 @@ app.whenReady().then(() => {
   app.setAppUserModelId("net.kryoclient.launcher");
   store = new Store();
   accounts = new AccountStore();
+  openVerificationCache(store.gameDir());
   registerHandlers();
   createWindow();
   log("launcher started");
@@ -450,6 +455,10 @@ app.whenReady().then(() => {
 app.on("window-all-closed", () => {
   running?.kill();
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  flushVerificationCache();
 });
 
 process.on("uncaughtException", (error) => {

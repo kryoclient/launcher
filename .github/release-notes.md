@@ -8,6 +8,8 @@ Loaders, a real version picker, and a Microsoft sign-in that opens a browser win
 
 **Microsoft sign-in without the ceremony.** The real Microsoft page opens in a window — pick an account, approve, done. No device codes to copy, and no Azure application ID to register first. If you would rather use your own app registration, the field is still in Settings; leave it empty and the built-in one is used.
 
+**A second launch that does not re-check everything.** KRYO used to re-hash the client jar and stat every one of the ~4 750 asset files before each start. It now keeps the checksums it has already verified, keyed by size and modification time, and remembers that a profile's assets are complete. On the machine this was measured on that is 2.4 seconds of disk work per launch turned into 16 milliseconds. *Install only* still runs the full verification pass whenever you want everything checked again.
+
 **An Updates screen.** Every release and every beta, pulled from GitHub, with the notes rendered in the launcher. It is where you are reading this from, if you are reading it there.
 
 **A new icon.** On the window, the taskbar and the installer.
