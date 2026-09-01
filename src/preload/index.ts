@@ -15,6 +15,8 @@ import type {
   ServerEntry,
   ServerStatus,
   Settings,
+  StorageMode,
+  StorageUsage,
   UpdateStatus
 } from "../shared/types";
 import type { VersionSummary } from "../shared/types";
@@ -42,6 +44,8 @@ const api = {
   updateSettings: (patch: Partial<Settings>): Promise<LauncherState> => ipcRenderer.invoke("settings:update", patch),
 
   systemMemory: (): Promise<number> => ipcRenderer.invoke("system:memory"),
+  storageUsage: (): Promise<StorageUsage> => ipcRenderer.invoke("storage:usage"),
+  wipeStorage: (mode: StorageMode): Promise<number> => ipcRenderer.invoke("storage:wipe", mode),
 
   listVersions: (): Promise<VersionSummary[]> => ipcRenderer.invoke("versions:list"),
   listInstalled: (): Promise<InstalledVersion[]> => ipcRenderer.invoke("versions:installed"),

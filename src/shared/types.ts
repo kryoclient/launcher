@@ -29,6 +29,20 @@ export interface Profile {
   lastPlayed: number | null;
 }
 
+export type StorageMode = "cache" | "game" | "java" | "all";
+
+export interface StorageUsage {
+  gameDir: string;
+  versions: number;
+  libraries: number;
+  assets: number;
+  runtime: number;
+  instances: number;
+  cache: number;
+  launcher: number;
+  total: number;
+}
+
 export interface AccountCape {
   id: string;
   name: string;

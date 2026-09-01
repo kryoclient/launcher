@@ -10,6 +10,8 @@ import type {
   ReleaseEntry,
   ServerEntry,
   ServerStatus,
+  StorageMode,
+  StorageUsage,
   UpdateStatus,
   VersionSummary
 } from "./types";
@@ -31,6 +33,7 @@ const typeFilters = new Set<string>(["release"]);
 let installedOnly = false;
 
 let systemMemoryMb = 0;
+let usage: StorageUsage | null = null;
 let modCounts = new Map<string, number>();
 let draft: ProfileDraft | null = null;
 let draftBuilds: LoaderVersion[] = [];
@@ -125,7 +128,10 @@ function switchView(view: string): void {
   if (view === "profiles") void refreshModCounts();
   if (view === "servers") void refreshServers();
   if (view === "mods") void refreshMods();
-  if (view === "settings") void renderJava();
+  if (view === "settings") {
+    void renderJava();
+    void refreshUsage();
+  }
   if (view === "updates") void refreshReleases(false);
 }
 
@@ -1726,6 +1732,98 @@ function bindReleases(): void {
   });
 }
 
+function formatSize(bytes: number): string {
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+  if (bytes >= 1048576) return `${Math.round(bytes / 1048576)} MB`;
+  if (bytes > 0) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return "empty";
+}
+
+function renderUsage(): void {
+  const list = $("#usage-list");
+  list.innerHTML = "";
+
+  if (!usage) {
+    list.innerHTML = '<p class="empty">Measuring what is on disk…</p>';
+    return;
+  }
+
+  const rows: { label: string; path: string; size: number }[] = [
+    { label: "Versions and loaders", path: "versions/", size: usage.versions },
+    { label: "Libraries", path: "libraries/", size: usage.libraries },
+    { label: "Assets", path: "assets/", size: usage.assets },
+    { label: "Java runtimes", path: "runtime/", size: usage.runtime },
+    { label: "Worlds, mods and options", path: "instances/", size: usage.instances },
+    { label: "Caches and installers", path: "cache/", size: usage.cache },
+    { label: "Settings, accounts and logs", path: "launcher data", size: usage.launcher }
+  ];
+
+  for (const row of rows) {
+    const node = el("div", "usage-row");
+    const name = el("span", "");
+    name.append(el("span", "", row.label), el("span", "usage-path", row.path));
+    node.append(name, el("span", "usage-size", formatSize(row.size)));
+    list.appendChild(node);
+  }
+
+  const total = el("div", "usage-row total");
+  total.append(el("span", "", "Everything KRYO has written"), el("span", "usage-size", formatSize(usage.total)));
+  list.appendChild(total);
+}
+
+async function refreshUsage(): Promise<void> {
+  usage = null;
+  renderUsage();
+
+  try {
+    usage = await api.storageUsage();
+  } catch (error) {
+    usage = null;
+    toast(errorMessage(error), true);
+  }
+
+  renderUsage();
+}
+
+function bindStorage(): void {
+  $("#wipe-row").addEventListener("click", async (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-wipe]");
+    if (!button?.dataset.wipe) return;
+
+    const mode = button.dataset.wipe as StorageMode;
+
+    if (button.dataset.armed !== "yes") {
+      button.dataset.label = button.textContent ?? "";
+      button.dataset.armed = "yes";
+      button.textContent = mode === "all" ? "Erase everything?" : "Sure?";
+      window.setTimeout(() => {
+        if (!button.isConnected || button.dataset.armed !== "yes") return;
+        button.dataset.armed = "";
+        button.textContent = button.dataset.label ?? "";
+      }, 5000);
+      return;
+    }
+
+    button.dataset.armed = "";
+    button.textContent = button.dataset.label ?? "";
+
+    const buttons = document.querySelectorAll<HTMLButtonElement>("#wipe-row button");
+    buttons.forEach((entry) => (entry.disabled = true));
+
+    try {
+      const freed = await api.wipeStorage(mode);
+      toast(freed > 0 ? `Freed ${formatSize(freed)}` : "Nothing to remove");
+      installed = await api.listInstalled();
+      renderVersionTrigger();
+      await refreshUsage();
+    } catch (error) {
+      toast(errorMessage(error), true);
+    } finally {
+      buttons.forEach((entry) => (entry.disabled = false));
+    }
+  });
+}
+
 function bindSettings(): void {
   $("#game-dir-pick").addEventListener("click", async () => {
     const folder = await api.pickFolder();
@@ -1863,6 +1961,7 @@ async function boot(): Promise<void> {
   bindServers();
   bindReleases();
   bindSettings();
+  bindStorage();
   bindGameEvents();
   bindUpdates();
 

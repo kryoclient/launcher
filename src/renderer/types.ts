@@ -149,6 +149,20 @@ export interface AuthPhase {
   message: string;
 }
 
+export type StorageMode = "cache" | "game" | "java" | "all";
+
+export interface StorageUsage {
+  gameDir: string;
+  versions: number;
+  libraries: number;
+  assets: number;
+  runtime: number;
+  instances: number;
+  cache: number;
+  launcher: number;
+  total: number;
+}
+
 export interface KryoApi {
   getState(): Promise<LauncherState>;
   addOfflineAccount(username: string): Promise<LauncherState>;
@@ -164,6 +178,8 @@ export interface KryoApi {
   selectProfile(id: string): Promise<LauncherState>;
   updateSettings(patch: Partial<Settings>): Promise<LauncherState>;
   systemMemory(): Promise<number>;
+  storageUsage(): Promise<StorageUsage>;
+  wipeStorage(mode: StorageMode): Promise<number>;
   listVersions(): Promise<VersionSummary[]>;
   listInstalled(): Promise<InstalledVersion[]>;
   listLoaders(): Promise<LoaderInfo[]>;

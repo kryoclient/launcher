@@ -526,9 +526,15 @@ button.link:hover {
   color: var(--ice);
 }
 
-.danger-text {
+.danger-text,
+button.ghost.danger-text {
   color: var(--danger);
+  border-color: rgba(212, 9, 36, 0.55);
+}
+
+button.ghost.danger-text:hover {
   border-color: var(--danger);
+  color: var(--danger);
 }
 
 .hidden {
@@ -1658,6 +1664,51 @@ button.link.inline {
 
 .ram-row {
   margin-bottom: 9px;
+}
+
+.usage-list {
+  margin-bottom: 14px;
+}
+
+.usage-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--edge);
+  font-size: 12.5px;
+}
+
+.usage-row:last-child {
+  border-bottom: none;
+}
+
+.usage-row.total {
+  color: var(--ice);
+}
+
+.usage-path {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim2);
+  margin-left: 8px;
+}
+
+.usage-size {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.usage-row.total .usage-size {
+  color: var(--ice);
+}
+
+.wipe-row button[data-armed="yes"] {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .disclosure {

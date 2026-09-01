@@ -351,6 +351,22 @@
           </div>
 
           <div class="panel">
+            <span class="panel-title">Files and reinstall</span>
+            <div class="usage-list" id="usage-list"></div>
+            <div class="inline-gap wipe-row" id="wipe-row">
+              <button type="button" class="ghost" data-wipe="cache">Clear caches</button>
+              <button type="button" class="ghost" data-wipe="java">Remove Java</button>
+              <button type="button" class="ghost" data-wipe="game">Reinstall game files</button>
+              <button type="button" class="ghost danger-text" data-wipe="all">Reset everything</button>
+            </div>
+            <p class="hint">
+              Reinstalling game files deletes versions, libraries and assets — the next launch downloads them again.
+              Worlds and mods live in <span class="mono">instances/</span> and are only removed by a full reset, which also
+              clears profiles and accounts and restarts the launcher.
+            </p>
+          </div>
+
+          <div class="panel">
             <span class="panel-title">Behaviour</span>
             <label class="switch-row">
               <input type="checkbox" id="opt-snapshots" />

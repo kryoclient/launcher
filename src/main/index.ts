@@ -1,4 +1,4 @@
-import { BrowserWindow, app, dialog, ipcMain, shell } from "electron";
+import { BrowserWindow, app, dialog, ipcMain, session, shell } from "electron";
 import type { ChildProcess } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { totalmem } from "node:os";
@@ -14,6 +14,7 @@ import type {
   Progress,
   ServerEntry,
   Settings,
+  StorageMode,
   VersionSummary
 } from "../shared/types";
 import { AccountStore } from "./auth/accounts";
@@ -34,6 +35,7 @@ import { instanceDir, launchGame } from "./launch";
 import { deleteMod, installMod, listMods, searchMods, toggleMod } from "./mods";
 import { listReleases } from "./releases";
 import { pingAll } from "./serverPing";
+import { storageUsage, wipeStorage } from "./storage";
 import { Store } from "./store";
 import { checkForUpdates, currentUpdateStatus, installUpdate } from "./updater";
 import { flushVerificationCache, openVerificationCache } from "./verify";
@@ -311,6 +313,23 @@ function registerHandlers(): void {
   ipcMain.handle("servers:ping", (_event, addresses: string[]) => pingAll(addresses));
 
   ipcMain.handle("system:memory", () => Math.floor(totalmem() / 1048576));
+
+  ipcMain.handle("storage:usage", () => storageUsage(store.gameDir(), app.getPath("userData")));
+
+  ipcMain.handle("storage:wipe", async (_event, mode: StorageMode) => {
+    if (running) throw new Error("Close Minecraft before clearing files");
+
+    const freed = await wipeStorage(store.gameDir(), app.getPath("userData"), mode);
+    log(`storage wipe (${mode}) freed ${Math.round(freed / 1048576)} MB`);
+
+    if (mode === "all") {
+      await session.fromPartition("persist:kryo-msa").clearStorageData();
+      app.relaunch();
+      app.exit(0);
+    }
+
+    return freed;
+  });
 
   ipcMain.handle("mods:list", (_event, profileId: string) => listMods(store.gameDir(), profileId));
   ipcMain.handle("mods:toggle", (_event, profileId: string, file: string) =>

@@ -107,6 +107,22 @@ Each profile stores the loader and an exact loader build. Leave the build on *Re
 
 Config lives in Electron's `userData` folder: `kryo-config.json` (profiles, settings), `kryo-accounts.json` (accounts, encrypted tokens), `logs/launcher.log`.
 
+## Removing it again
+
+The installer only owns the program folder, so uninstalling used to leave the downloads behind — the game files alone run to hundreds of megabytes. The uninstaller now asks whether to delete them as well, and deletes `%APPDATA%/.kryo` together with the launcher's settings and accounts if you say yes. It never asks during an update, and a silent uninstall always keeps the data. A game folder you pointed somewhere else in Settings is not touched — clear that one from inside the launcher first.
+
+Inside the launcher, **Settings → Files and reinstall** lists what is on disk and removes it piece by piece:
+
+| Action | Removes | Keeps |
+| --- | --- | --- |
+| Clear caches | `cache/`, `installers/` | everything else |
+| Remove Java | `runtime/` | everything else |
+| Reinstall game files | `versions/`, `libraries/`, `assets/`, caches | worlds, mods, profiles, accounts |
+| Reset everything | the whole game folder, profiles, accounts, the stored Microsoft session | the launcher itself |
+
+Every button asks a second time before it does anything, and none of them run while Minecraft is open. *Reinstall game files* is the repair path: the next launch downloads what it needs again.
+
+
 ## Source layout
 
 ```
