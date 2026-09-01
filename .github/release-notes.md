@@ -1,16 +1,17 @@
-A screen for profiles, a dialog that makes them in one pass, and a new look.
+Uninstalling takes the downloads with it, and Settings can now clear them one folder at a time.
 
 ## What is new in VERSION
 
-**Profiles have their own screen.** One card per profile with its version, loader and build, memory, mod count and when it was last played. Play, edit, duplicate, open folder and delete sit on every card — and delete now asks a second time instead of removing a profile on the first click. Clicking a card selects it; the Play screen keeps the dropdown and links here.
+**Uninstalling actually uninstalls.** Removing KRYO used to leave everything it had downloaded behind — on the machine this was written on, 618 MB of versions, libraries, assets and Java runtimes the uninstaller never mentioned. It now asks whether to delete `%APPDATA%\.kryo` and the launcher's own settings as well. The question is skipped during an update, and a silent uninstall keeps your data, so the auto-updater can never wipe a profile.
 
-**Making a profile is one dialog.** Start from a preset — Vanilla, Fabric, Forge, OptiFine, or a copy of the profile you are on — and everything is filled in: the latest release, the loader, its recommended build. The version field is the same searchable picker, the memory row offers presets bounded by the RAM your machine actually has, and the name writes itself from the version and loader unless you type one. Enter creates it. JVM arguments and window size stay behind *Advanced*, where they belong.
+**Files and reinstall, in Settings.** What is on disk, broken down by folder — versions, libraries, assets, Java runtimes, worlds and mods, caches, launcher data — with a total. Four actions sit under it:
 
-**A new coat of paint.** Warm near-black instead of blue-grey, one orange accent, rounded corners, and Manrope — bundled with the launcher, so it looks the same on a machine that has never installed a font. The application icon follows.
+- **Clear caches** — the verification cache and the loader installers KRYO keeps around
+- **Remove Java** — the runtimes KRYO downloaded; the next launch that needs one fetches it again
+- **Reinstall game files** — deletes versions, libraries and assets, and nothing else. Worlds, mods, profiles and accounts stay
+- **Reset everything** — the game folder plus profiles and accounts, the stored Microsoft session cleared, and the launcher restarts
 
-### Fixes
-
-- Skins and capes load again. Mojang hands back texture URLs on `http`, which the launcher's own content security policy refuses, so the account avatar stayed blank. The scheme is upgraded now, including for accounts stored before this build.
+Every one of them asks a second time before it runs, and none of them will run while the game is open.
 
 ## Which file do I download?
 
@@ -27,6 +28,7 @@ A screen for profiles, a dialog that makes them in one pass, and a new look.
 - Installs any version Mojang lists, verifying every file by sha1
 - Fabric, Quilt, Forge, NeoForge and OptiFine from their official sources
 - A screen for profiles, and one dialog that creates them from a preset
+- Settings shows what is on disk and can clear it: caches, Java, game files, or everything
 - Finds your Java, or downloads a matching Adoptium runtime when a version needs one you do not have
 - Mod browser over Modrinth: install, toggle and remove per profile, matched to the profile's loader
 - Two kinds of account: an offline nickname, or a Microsoft licence through Xbox Live → XSTS → Minecraft services, with an ownership check

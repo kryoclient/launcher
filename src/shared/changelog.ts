@@ -2,6 +2,33 @@ import type { ReleaseEntry } from "./types";
 
 export const BUNDLED_CHANGELOG: ReleaseEntry[] = [
   {
+    tag: "v1.0.3",
+    version: "1.0.3",
+    name: "KRYO Client 1.0.3",
+    channel: "stable",
+    publishedAt: "2026-09-01",
+    url: "https://github.com/kryoclient/launcher/releases/tag/v1.0.3",
+    assets: [],
+    bundled: true,
+    notes: [
+      "Uninstalling takes the downloads with it, and Settings can now clear them one folder at a time.",
+      "",
+      "## Uninstall",
+      "",
+      "- Removing KRYO asks whether to delete the game folder and the launcher's own settings as well",
+      "- The question is skipped during an update, and a silent uninstall keeps everything, so the updater can never wipe a profile",
+      "",
+      "## Files and reinstall",
+      "",
+      "- Settings lists what is on disk folder by folder, with a total",
+      "- Clear caches: the verification cache and the loader installers",
+      "- Remove Java: the runtimes KRYO downloaded",
+      "- Reinstall game files: versions, libraries and assets go, worlds and mods stay",
+      "- Reset everything: also profiles, accounts and the stored Microsoft session, then the launcher restarts",
+      "- Every action asks a second time, and none of them run while the game is open"
+    ].join("\n")
+  },
+  {
     tag: "v1.0.2",
     version: "1.0.2",
     name: "KRYO Client 1.0.2",
