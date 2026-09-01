@@ -32,6 +32,10 @@
           <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7L8 5Z" /></svg>
           Play
         </button>
+        <button type="button" class="nav-item" data-view="profiles">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3.5 20.5 8 12 12.5 3.5 8 12 3.5Z" /><path d="M3.5 12.5 12 17l8.5-4.5" /></svg>
+          Profiles
+        </button>
         <button type="button" class="nav-item" data-view="mods">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M4 12h16M4 17h11" /></svg>
           Mods
@@ -75,8 +79,7 @@
             </div>
             <div class="profile-switch">
               <select id="profile-select" aria-label="Profile"></select>
-              <button type="button" class="ghost" id="profile-new">New</button>
-              <button type="button" class="ghost" id="profile-delete">Delete</button>
+              <button type="button" class="ghost" id="profile-manage">Manage</button>
             </div>
           </div>
 
@@ -155,6 +158,21 @@
             </div>
             <pre class="log mono" id="log"></pre>
           </div>
+        </section>
+
+        <section class="view" data-view="profiles">
+          <div class="view-head">
+            <div>
+              <span class="eyebrow">every profile</span>
+              <h1>Profiles</h1>
+            </div>
+            <div class="inline-gap">
+              <span class="note mono" id="profile-count"></span>
+              <button type="button" class="primary" id="profile-create">New profile</button>
+            </div>
+          </div>
+
+          <div class="profile-grid" id="profile-grid"></div>
         </section>
 
         <section class="view" data-view="mods">
@@ -349,6 +367,91 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <div class="overlay hidden" id="profile-overlay">
+      <div class="sheet">
+        <div class="sheet-head">
+          <span class="sheet-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3.5 20.5 8 12 12.5 3.5 8 12 3.5Z" /><path d="M3.5 12.5 12 17l8.5-4.5" /></svg>
+          </span>
+          <div class="sheet-title">
+            <h2 id="sheet-title">New profile</h2>
+            <span class="sheet-sub mono" id="sheet-sub">pick a version — everything else already has a default</span>
+          </div>
+          <button type="button" class="sheet-close" id="sheet-close" aria-label="Close">✕</button>
+        </div>
+
+        <div class="sheet-body">
+          <div class="field" id="preset-field">
+            <label>Start from</label>
+            <div class="preset-row" id="preset-row"></div>
+          </div>
+
+          <div class="grid-2 tight">
+            <div class="field">
+              <label for="draft-name">Name</label>
+              <input type="text" id="draft-name" spellcheck="false" maxlength="40" />
+            </div>
+
+            <div class="field">
+              <label>Minecraft version</label>
+              <button type="button" class="picker-trigger" id="draft-version">
+                <span id="draft-version-current">Pick a version</span>
+                <span class="picker-meta mono" id="draft-version-meta"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Loader</label>
+            <div class="loader-row" id="draft-loader-row"></div>
+          </div>
+
+          <div class="field" id="draft-build-field" hidden>
+            <label for="draft-build">Loader build</label>
+            <select id="draft-build"></select>
+          </div>
+
+          <div class="field">
+            <label for="draft-memory">Memory <span id="draft-memory-value" class="mono">4096 MB</span></label>
+            <div class="inline-gap ram-row" id="ram-row"></div>
+            <input type="range" id="draft-memory" min="1024" max="16384" step="512" />
+            <p class="hint" id="draft-memory-hint"></p>
+          </div>
+
+          <button type="button" class="disclosure" id="draft-advanced-toggle">
+            <span>Advanced</span>
+            <span class="mono" id="draft-advanced-mark">+</span>
+          </button>
+
+          <div id="draft-advanced" hidden>
+            <div class="field">
+              <label for="draft-jvm">JVM arguments</label>
+              <input type="text" id="draft-jvm" spellcheck="false" />
+            </div>
+            <div class="field">
+              <label>Window</label>
+              <div class="inline">
+                <input type="number" id="draft-width" min="640" step="10" aria-label="Width" />
+                <input type="number" id="draft-height" min="480" step="10" aria-label="Height" />
+                <label class="switch-row compact">
+                  <input type="checkbox" id="draft-fullscreen" />
+                  <span>Fullscreen</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sheet-foot">
+          <span class="sheet-summary mono" id="draft-summary"></span>
+          <div class="inline-gap">
+            <button type="button" class="ghost" id="draft-cancel">Cancel</button>
+            <button type="button" class="primary" id="draft-save">Create profile</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="overlay hidden" id="version-overlay">

@@ -1,6 +1,7 @@
 import { BrowserWindow, app, dialog, ipcMain, shell } from "electron";
 import type { ChildProcess } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { totalmem } from "node:os";
 import { join } from "node:path";
 import type {
   InstalledVersion,
@@ -308,6 +309,8 @@ function registerHandlers(): void {
 
   ipcMain.handle("servers:list", () => POPULAR_SERVERS);
   ipcMain.handle("servers:ping", (_event, addresses: string[]) => pingAll(addresses));
+
+  ipcMain.handle("system:memory", () => Math.floor(totalmem() / 1048576));
 
   ipcMain.handle("mods:list", (_event, profileId: string) => listMods(store.gameDir(), profileId));
   ipcMain.handle("mods:toggle", (_event, profileId: string, file: string) =>

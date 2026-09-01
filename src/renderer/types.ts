@@ -163,6 +163,7 @@ export interface KryoApi {
   deleteProfile(id: string): Promise<LauncherState>;
   selectProfile(id: string): Promise<LauncherState>;
   updateSettings(patch: Partial<Settings>): Promise<LauncherState>;
+  systemMemory(): Promise<number>;
   listVersions(): Promise<VersionSummary[]>;
   listInstalled(): Promise<InstalledVersion[]>;
   listLoaders(): Promise<LoaderInfo[]>;

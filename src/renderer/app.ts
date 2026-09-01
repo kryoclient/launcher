@@ -30,10 +30,43 @@ let authPending = false;
 const typeFilters = new Set<string>(["release"]);
 let installedOnly = false;
 
+let systemMemoryMb = 0;
+let modCounts = new Map<string, number>();
+let draft: ProfileDraft | null = null;
+let draftBuilds: LoaderVersion[] = [];
+let pickerCurrent = "";
+let pickerHandler: ((versionId: string) => void | Promise<void>) | null = null;
+
+interface ProfileDraft {
+  id: string | null;
+  name: string;
+  versionId: string;
+  loader: Profile["loader"];
+  loaderVersion: string;
+  memoryMb: number;
+  jvmArgs: string;
+  width: number;
+  height: number;
+  fullscreen: boolean;
+  javaPath: string | null;
+}
+
 function $<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (!element) throw new Error(`Missing element: ${selector}`);
   return element;
+}
+
+function el(tag: string, className: string, text = ""): HTMLElement {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text) node.textContent = text;
+  return node;
+}
+
+function gb(megabytes: number): string {
+  const value = megabytes / 1024;
+  return `${Number.isInteger(value) ? value : value.toFixed(1)} GB`;
 }
 
 function activeProfile(): Profile | null {
@@ -89,6 +122,7 @@ function switchView(view: string): void {
     section.classList.toggle("active", (section as HTMLElement).dataset.view === view);
   });
 
+  if (view === "profiles") void refreshModCounts();
   if (view === "servers") void refreshServers();
   if (view === "mods") void refreshMods();
   if (view === "settings") void renderJava();
@@ -191,7 +225,6 @@ function renderVersionTrigger(): void {
 function renderVersionList(): void {
   const list = $("#version-list");
   const query = $<HTMLInputElement>("#version-search").value.trim().toLowerCase();
-  const profile = activeProfile();
 
   const matches = versions.filter((version) => {
     if (installedOnly && !isInstalled(version.id)) return false;
@@ -210,7 +243,7 @@ function renderVersionList(): void {
   for (const version of matches.slice(0, 400)) {
     const row = document.createElement("button");
     row.type = "button";
-    row.className = `picker-row${version.id === profile?.versionId ? " current" : ""}`;
+    row.className = `picker-row${version.id === pickerCurrent ? " current" : ""}`;
     row.dataset.version = version.id;
     row.innerHTML = `
       <span class="picker-id">${version.id}</span>
@@ -697,6 +730,7 @@ async function refreshMods(): Promise<void> {
 function renderAll(): void {
   renderAccounts();
   renderProfiles();
+  renderProfileGrid();
   renderSettings();
   renderCapes();
   renderLoaderRow();
@@ -816,16 +850,24 @@ async function patchProfile(patch: Partial<Profile>): Promise<void> {
   await apply(api.updateProfile(profile.id, patch));
 }
 
+function openVersionPicker(current: string, onPick: (versionId: string) => void | Promise<void>): void {
+  pickerCurrent = current;
+  pickerHandler = onPick;
+  $("#version-overlay").classList.remove("hidden");
+  renderVersionList();
+  $<HTMLInputElement>("#version-search").focus();
+}
+
 function bindVersionPicker(): void {
   const overlay = $("#version-overlay");
 
-  const open = (): void => {
-    overlay.classList.remove("hidden");
-    renderVersionList();
-    $<HTMLInputElement>("#version-search").focus();
-  };
-
-  $("#version-trigger").addEventListener("click", open);
+  $("#version-trigger").addEventListener("click", () => {
+    openVersionPicker(activeProfile()?.versionId ?? "", async (versionId) => {
+      await patchProfile({ versionId, loaderVersion: "" });
+      await refreshLoaderBuilds();
+      await refreshMods();
+    });
+  });
   $("#version-close").addEventListener("click", () => overlay.classList.add("hidden"));
 
   overlay.addEventListener("click", (event) => {
@@ -858,15 +900,629 @@ function bindVersionPicker(): void {
     renderVersionList();
   });
 
-  $("#version-list").addEventListener("click", async (event) => {
+  $("#version-list").addEventListener("click", (event) => {
     const row = (event.target as HTMLElement).closest<HTMLElement>("[data-version]");
     if (!row?.dataset.version) return;
 
     overlay.classList.add("hidden");
-    await patchProfile({ versionId: row.dataset.version, loaderVersion: "" });
-    await refreshLoaderBuilds();
-    await refreshMods();
+    void pickerHandler?.(row.dataset.version);
   });
+}
+
+function latestRelease(): string {
+  return (versions.find((version) => version.type === "release") ?? versions[0])?.id ?? "";
+}
+
+function uniqueName(base: string, ignoreId: string | null): string {
+  const taken = new Set(
+    state.profiles.filter((profile) => profile.id !== ignoreId).map((profile) => profile.name.toLowerCase())
+  );
+
+  if (!taken.has(base.toLowerCase())) return base;
+
+  for (let index = 2; index < 200; index += 1) {
+    const candidate = `${base} ${index}`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
+
+  return base;
+}
+
+function suggestedName(source: ProfileDraft): string {
+  const version = source.versionId || "profile";
+  const base = source.loader === "vanilla" ? `Minecraft ${version}` : `${loaderName(source.loader)} ${version}`;
+  return uniqueName(base, source.id);
+}
+
+function blankDraft(): ProfileDraft {
+  const base = activeProfile();
+
+  return {
+    id: null,
+    name: "",
+    versionId: latestRelease(),
+    loader: "vanilla",
+    loaderVersion: "",
+    memoryMb: base?.memoryMb ?? 4096,
+    jvmArgs: base?.jvmArgs ?? "",
+    width: base?.width ?? 1280,
+    height: base?.height ?? 720,
+    fullscreen: false,
+    javaPath: null
+  };
+}
+
+function draftFrom(profile: Profile): ProfileDraft {
+  return {
+    id: profile.id,
+    name: profile.name,
+    versionId: profile.versionId,
+    loader: profile.loader,
+    loaderVersion: profile.loaderVersion,
+    memoryMb: profile.memoryMb,
+    jvmArgs: profile.jvmArgs,
+    width: profile.width,
+    height: profile.height,
+    fullscreen: profile.fullscreen,
+    javaPath: profile.javaPath
+  };
+}
+
+function memoryCeiling(): number {
+  if (!systemMemoryMb) return 16384;
+  return Math.max(2048, Math.min(32768, Math.floor((systemMemoryMb - 1024) / 512) * 512));
+}
+
+function memoryHint(value: number): string {
+  if (!systemMemoryMb) return "";
+
+  const total = gb(systemMemoryMb);
+  if (value > systemMemoryMb - 2048) return `This machine has ${total} — leave about 2 GB for the system.`;
+  if (value >= 8192) return `Of ${total} installed. Past 8 GB only heavy modpacks notice.`;
+
+  return `Of ${total} installed.`;
+}
+
+function draftSummary(): string {
+  if (!draft) return "";
+  if (!draft.versionId) return "pick a version to continue";
+
+  const parts = [draft.versionId, draft.loader === "vanilla" ? "vanilla" : loaderName(draft.loader).toLowerCase()];
+  if (draft.loader !== "vanilla") parts.push(draft.loaderVersion || "recommended build");
+  parts.push(`${gb(draft.memoryMb).toLowerCase()} ram`);
+  if (isInstalled(draft.versionId)) parts.push("installed");
+
+  return parts.join(" · ");
+}
+
+function renderRamRow(): void {
+  const row = $("#ram-row");
+  const ceiling = memoryCeiling();
+  row.innerHTML = "";
+
+  for (const value of [2048, 4096, 6144, 8192, 12288]) {
+    if (value > ceiling) continue;
+
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `chip${draft?.memoryMb === value ? " on" : ""}`;
+    chip.dataset.ram = String(value);
+    chip.textContent = gb(value);
+    row.appendChild(chip);
+  }
+}
+
+function renderPresets(): void {
+  const row = $("#preset-row");
+  row.innerHTML = "";
+
+  const presets = [
+    { id: "vanilla", title: "Vanilla", sub: "latest release" },
+    { id: "fabric", title: "Fabric", sub: "mods, fps" },
+    { id: "forge", title: "Forge", sub: "classic mods" },
+    { id: "optifine", title: "OptiFine", sub: "shaders" }
+  ];
+
+  const current = activeProfile();
+  if (current) presets.push({ id: "copy", title: "Copy active", sub: current.name });
+
+  for (const preset of presets) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "preset";
+    button.dataset.preset = preset.id;
+    button.append(el("span", "", preset.title), el("span", "mono", preset.sub));
+    row.appendChild(button);
+  }
+}
+
+function renderDraft(): void {
+  if (!draft) return;
+
+  const creating = draft.id === null;
+
+  $("#sheet-title").textContent = creating ? "New profile" : "Edit profile";
+  $("#sheet-sub").textContent = creating ? "pick a version — the rest already has a default" : draft.name;
+  $("#preset-field").hidden = !creating;
+  $("#draft-save").textContent = creating ? "Create profile" : "Save changes";
+
+  const name = $<HTMLInputElement>("#draft-name");
+  if (name.value !== draft.name) name.value = draft.name;
+  name.placeholder = suggestedName(draft);
+
+  $("#draft-version-current").textContent = draft.versionId || "Pick a version";
+
+  const summary = versions.find((version) => version.id === draft?.versionId);
+  const bits: string[] = [];
+  if (summary) bits.push(versionType(summary));
+  if (draft.versionId && isInstalled(draft.versionId)) bits.push("installed");
+  $("#draft-version-meta").textContent = bits.join(" · ");
+
+  const row = $("#draft-loader-row");
+  row.innerHTML = "";
+
+  for (const loader of loaders) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `loader-chip${draft.loader === loader.id ? " active" : ""}`;
+    button.dataset.draftLoader = loader.id;
+    button.append(el("span", "", loader.name), el("span", "loader-tag", loader.tag));
+    row.appendChild(button);
+  }
+
+  const memory = $<HTMLInputElement>("#draft-memory");
+  memory.max = String(memoryCeiling());
+  memory.value = String(draft.memoryMb);
+  $("#draft-memory-value").textContent = `${draft.memoryMb} MB`;
+  $("#draft-memory-hint").textContent = memoryHint(draft.memoryMb);
+  renderRamRow();
+
+  $<HTMLInputElement>("#draft-jvm").value = draft.jvmArgs;
+  $<HTMLInputElement>("#draft-width").value = String(draft.width);
+  $<HTMLInputElement>("#draft-height").value = String(draft.height);
+  $<HTMLInputElement>("#draft-fullscreen").checked = draft.fullscreen;
+
+  $("#draft-summary").textContent = draftSummary();
+  $<HTMLButtonElement>("#draft-save").disabled = !draft.versionId;
+}
+
+async function refreshDraftBuilds(): Promise<void> {
+  const field = $("#draft-build-field");
+  const select = $<HTMLSelectElement>("#draft-build");
+
+  if (!draft || draft.loader === "vanilla" || !draft.versionId) {
+    field.hidden = true;
+    draftBuilds = [];
+    return;
+  }
+
+  const loader = draft.loader;
+  const versionId = draft.versionId;
+
+  field.hidden = false;
+  select.disabled = true;
+  select.innerHTML = '<option value="">Loading builds…</option>';
+
+  try {
+    draftBuilds = await api.listLoaderVersions(loader, versionId);
+  } catch (error) {
+    draftBuilds = [];
+    select.innerHTML = `<option value="">${errorMessage(error)}</option>`;
+    return;
+  }
+
+  if (!draft || draft.loader !== loader || draft.versionId !== versionId) return;
+
+  select.innerHTML = "";
+
+  if (draftBuilds.length === 0) {
+    select.innerHTML = `<option value="">${loaderName(loader)} has no build for ${versionId}</option>`;
+    return;
+  }
+
+  const auto = document.createElement("option");
+  auto.value = "";
+  auto.textContent = `Recommended · ${draftBuilds.find((build) => build.recommended)?.label ?? draftBuilds[0].label}`;
+  select.appendChild(auto);
+
+  for (const build of draftBuilds) {
+    const option = document.createElement("option");
+    option.value = build.id;
+    const marks = [build.recommended ? "recommended" : "", build.stable ? "" : "beta"].filter(Boolean);
+    option.textContent = marks.length > 0 ? `${build.label} · ${marks.join(" · ")}` : build.label;
+    option.selected = draft.loaderVersion === build.id;
+    select.appendChild(option);
+  }
+
+  select.disabled = false;
+}
+
+function openProfileSheet(profile: Profile | null): void {
+  draft = profile ? draftFrom(profile) : blankDraft();
+
+  $("#draft-advanced").hidden = true;
+  $("#draft-advanced-mark").textContent = "+";
+
+  renderPresets();
+  renderDraft();
+
+  $("#profile-overlay").classList.remove("hidden");
+  $<HTMLInputElement>("#draft-name").focus();
+
+  void refreshDraftBuilds();
+}
+
+function closeProfileSheet(): void {
+  draft = null;
+  $("#profile-overlay").classList.add("hidden");
+}
+
+async function saveDraft(): Promise<void> {
+  if (!draft) return;
+
+  if (!draft.versionId) {
+    toast("Pick a Minecraft version first", true);
+    return;
+  }
+
+  const name = draft.name.trim() || suggestedName(draft);
+  const target = draft.id;
+  const creating = target === null;
+
+  const patch: Partial<Profile> = {
+    name,
+    versionId: draft.versionId,
+    loader: draft.loader,
+    loaderVersion: draft.loaderVersion,
+    memoryMb: draft.memoryMb,
+    jvmArgs: draft.jvmArgs,
+    width: draft.width,
+    height: draft.height,
+    fullscreen: draft.fullscreen,
+    javaPath: draft.javaPath
+  };
+
+  try {
+    await apply(creating ? api.createProfile(patch) : api.updateProfile(target, patch));
+  } catch (error) {
+    toast(errorMessage(error), true);
+    return;
+  }
+
+  closeProfileSheet();
+  await refreshLoaderBuilds();
+  await refreshMods();
+  await refreshModCounts();
+  toast(creating ? `${name} is ready` : `${name} saved`);
+}
+
+function playedLabel(profile: Profile): string {
+  if (!profile.lastPlayed) return "never played";
+
+  const days = Math.floor((Date.now() - profile.lastPlayed) / 86400000);
+  if (days <= 0) return "played today";
+  if (days === 1) return "played yesterday";
+  if (days < 30) return `played ${days} days ago`;
+
+  return `played ${new Date(profile.lastPlayed).toLocaleDateString()}`;
+}
+
+function actionChip(action: string, id: string, label: string): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "chip";
+  button.dataset.act = action;
+  button.dataset.id = id;
+  button.textContent = label;
+  return button;
+}
+
+function renderProfileGrid(): void {
+  const grid = $("#profile-grid");
+  grid.innerHTML = "";
+
+  $("#profile-count").textContent = state.profiles.length === 1 ? "1 profile" : `${state.profiles.length} profiles`;
+
+  for (const profile of state.profiles) {
+    const active = profile.id === state.activeProfileId;
+    const card = el("div", `profile-card${active ? " active" : ""}`);
+    card.dataset.profile = profile.id;
+
+    const head = el("div", "profile-card-head");
+    head.append(
+      el("span", "profile-card-name", profile.name),
+      el("span", "profile-card-state", active ? "selected" : "select")
+    );
+
+    const tags = el("div", "tag-row");
+    tags.append(el("span", "tag accent", profile.versionId || "no version"));
+    tags.append(el("span", "tag", profile.loader === "vanilla" ? "vanilla" : loaderName(profile.loader).toLowerCase()));
+    if (profile.loader !== "vanilla" && profile.loaderVersion) tags.append(el("span", "tag", profile.loaderVersion));
+    tags.append(el("span", "tag", gb(profile.memoryMb).toLowerCase()));
+
+    const meta = el("div", "profile-card-meta");
+    const count = modCounts.get(profile.id) ?? 0;
+    meta.append(el("span", "", count === 1 ? "1 mod" : `${count} mods`), el("span", "", playedLabel(profile)));
+
+    const actions = el("div", "profile-card-actions");
+    actions.append(
+      actionChip("play", profile.id, "play"),
+      actionChip("edit", profile.id, "edit"),
+      actionChip("copy", profile.id, "duplicate"),
+      actionChip("folder", profile.id, "folder"),
+      actionChip("delete", profile.id, "delete")
+    );
+
+    card.append(head, tags, meta, actions);
+    grid.appendChild(card);
+  }
+}
+
+async function refreshModCounts(): Promise<void> {
+  const entries = await Promise.all(
+    state.profiles.map(async (profile): Promise<[string, number]> => {
+      try {
+        return [profile.id, (await api.listMods(profile.id)).length];
+      } catch {
+        return [profile.id, 0];
+      }
+    })
+  );
+
+  modCounts = new Map(entries);
+  renderProfileGrid();
+}
+
+async function launchActive(): Promise<void> {
+  const profile = activeProfile();
+  if (!profile) return;
+
+  if (!activeAccount()) {
+    toast("Add an account first", true);
+    switchView("accounts");
+    return;
+  }
+
+  if (!profile.versionId) {
+    toast("Pick a Minecraft version first", true);
+    return;
+  }
+
+  const button = $<HTMLButtonElement>("#play-button");
+  button.disabled = true;
+  button.textContent = "Working…";
+
+  try {
+    await api.launch(profile.id);
+    $("#kill-button").classList.remove("hidden");
+    button.textContent = "Running";
+    installed = await api.listInstalled();
+    renderVersionTrigger();
+  } catch (error) {
+    toast(errorMessage(error), true);
+    setProgress("Failed", 0, 1);
+    button.disabled = false;
+    button.textContent = "Play";
+  }
+}
+
+async function useProfile(id: string): Promise<void> {
+  if (id === state.activeProfileId) return;
+
+  await apply(api.selectProfile(id));
+  await refreshLoaderBuilds();
+  await refreshMods();
+}
+
+function bindProfilesView(): void {
+  $("#profile-create").addEventListener("click", () => openProfileSheet(null));
+
+  $("#profile-grid").addEventListener("click", async (event) => {
+    const target = event.target as HTMLElement;
+    const button = target.closest<HTMLButtonElement>("[data-act]");
+    const card = target.closest<HTMLElement>("[data-profile]");
+    const id = button?.dataset.id ?? card?.dataset.profile;
+    if (!id) return;
+
+    const profile = state.profiles.find((entry) => entry.id === id);
+    if (!profile) return;
+
+    if (!button) {
+      await useProfile(id);
+      return;
+    }
+
+    const action = button.dataset.act;
+
+    if (action === "edit") {
+      openProfileSheet(profile);
+      return;
+    }
+
+    if (action === "folder") {
+      void api.openGameDir(id);
+      return;
+    }
+
+    if (action === "play") {
+      await useProfile(id);
+      switchView("play");
+      await launchActive();
+      return;
+    }
+
+    if (action === "copy") {
+      await apply(
+        api.createProfile({
+          name: uniqueName(`${profile.name} copy`, null),
+          versionId: profile.versionId,
+          loader: profile.loader,
+          loaderVersion: profile.loaderVersion,
+          memoryMb: profile.memoryMb,
+          jvmArgs: profile.jvmArgs,
+          width: profile.width,
+          height: profile.height,
+          fullscreen: profile.fullscreen,
+          javaPath: profile.javaPath,
+          lastPlayed: null
+        })
+      );
+      await refreshLoaderBuilds();
+      await refreshModCounts();
+      toast("Profile duplicated");
+      return;
+    }
+
+    if (action === "delete") {
+      if (state.profiles.length <= 1) {
+        toast("Keep at least one profile", true);
+        return;
+      }
+
+      if (button.dataset.armed !== "yes") {
+        button.dataset.armed = "yes";
+        button.textContent = "really?";
+        button.classList.add("on");
+        window.setTimeout(() => {
+          if (!button.isConnected) return;
+          button.dataset.armed = "";
+          button.textContent = "delete";
+          button.classList.remove("on");
+        }, 4000);
+        return;
+      }
+
+      await apply(api.deleteProfile(id));
+      await refreshLoaderBuilds();
+      await refreshMods();
+      await refreshModCounts();
+      toast(`${profile.name} deleted`);
+    }
+  });
+}
+
+function bindProfileSheet(): void {
+  const overlay = $("#profile-overlay");
+
+  $("#sheet-close").addEventListener("click", closeProfileSheet);
+  $("#draft-cancel").addEventListener("click", closeProfileSheet);
+
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeProfileSheet();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (!$("#version-overlay").classList.contains("hidden")) return;
+    if (overlay.classList.contains("hidden")) return;
+    closeProfileSheet();
+  });
+
+  $("#preset-row").addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-preset]");
+    if (!button?.dataset.preset || !draft) return;
+
+    if (button.dataset.preset === "copy") {
+      const current = activeProfile();
+      if (!current) return;
+      draft = { ...draftFrom(current), id: null, name: "" };
+    } else {
+      draft.loader = button.dataset.preset as Profile["loader"];
+      draft.loaderVersion = "";
+      draft.versionId = latestRelease();
+    }
+
+    renderDraft();
+    void refreshDraftBuilds();
+  });
+
+  const name = $<HTMLInputElement>("#draft-name");
+
+  name.addEventListener("input", () => {
+    if (!draft) return;
+    draft.name = name.value;
+    $("#draft-summary").textContent = draftSummary();
+  });
+
+  name.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") void saveDraft();
+  });
+
+  $("#draft-version").addEventListener("click", () => {
+    if (!draft) return;
+
+    openVersionPicker(draft.versionId, (versionId) => {
+      if (!draft) return;
+      draft.versionId = versionId;
+      draft.loaderVersion = "";
+      renderDraft();
+      void refreshDraftBuilds();
+    });
+  });
+
+  $("#draft-loader-row").addEventListener("click", (event) => {
+    const chip = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-draft-loader]");
+    if (!chip?.dataset.draftLoader || !draft) return;
+
+    draft.loader = chip.dataset.draftLoader as Profile["loader"];
+    draft.loaderVersion = "";
+    renderDraft();
+    void refreshDraftBuilds();
+  });
+
+  $<HTMLSelectElement>("#draft-build").addEventListener("change", (event) => {
+    if (!draft) return;
+    draft.loaderVersion = (event.target as HTMLSelectElement).value;
+    $("#draft-summary").textContent = draftSummary();
+  });
+
+  const memory = $<HTMLInputElement>("#draft-memory");
+
+  memory.addEventListener("input", () => {
+    if (!draft) return;
+    draft.memoryMb = Number(memory.value);
+    $("#draft-memory-value").textContent = `${draft.memoryMb} MB`;
+    $("#draft-memory-hint").textContent = memoryHint(draft.memoryMb);
+    $("#draft-summary").textContent = draftSummary();
+    renderRamRow();
+  });
+
+  $("#ram-row").addEventListener("click", (event) => {
+    const chip = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-ram]");
+    if (!chip?.dataset.ram || !draft) return;
+
+    draft.memoryMb = Number(chip.dataset.ram);
+    renderDraft();
+  });
+
+  $("#draft-advanced-toggle").addEventListener("click", () => {
+    const panel = $("#draft-advanced");
+    panel.hidden = !panel.hidden;
+    $("#draft-advanced-mark").textContent = panel.hidden ? "+" : "−";
+    if (!panel.hidden) panel.scrollIntoView({ block: "end", behavior: "smooth" });
+  });
+
+  $<HTMLInputElement>("#draft-jvm").addEventListener("input", (event) => {
+    if (!draft) return;
+    draft.jvmArgs = (event.target as HTMLInputElement).value;
+  });
+
+  $<HTMLInputElement>("#draft-width").addEventListener("change", (event) => {
+    if (!draft) return;
+    draft.width = Number((event.target as HTMLInputElement).value);
+  });
+
+  $<HTMLInputElement>("#draft-height").addEventListener("change", (event) => {
+    if (!draft) return;
+    draft.height = Number((event.target as HTMLInputElement).value);
+  });
+
+  $<HTMLInputElement>("#draft-fullscreen").addEventListener("change", (event) => {
+    if (!draft) return;
+    draft.fullscreen = (event.target as HTMLInputElement).checked;
+  });
+
+  $("#draft-save").addEventListener("click", () => void saveDraft());
 }
 
 function bindPlayView(): void {
@@ -876,27 +1532,7 @@ function bindPlayView(): void {
     await refreshMods();
   });
 
-  $("#profile-new").addEventListener("click", async () => {
-    const profile = activeProfile();
-    await apply(
-      api.createProfile({
-        name: `Profile ${state.profiles.length + 1}`,
-        versionId: profile?.versionId ?? versions[0]?.id ?? ""
-      })
-    );
-    await refreshLoaderBuilds();
-  });
-
-  $("#profile-delete").addEventListener("click", async () => {
-    const profile = activeProfile();
-    if (!profile) return;
-    if (state.profiles.length <= 1) {
-      toast("Keep at least one profile", true);
-      return;
-    }
-    await apply(api.deleteProfile(profile.id));
-    await refreshLoaderBuilds();
-  });
+  $("#profile-manage").addEventListener("click", () => switchView("profiles"));
 
   $("#loader-row").addEventListener("click", async (event) => {
     const chip = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-loader]");
@@ -932,38 +1568,7 @@ function bindPlayView(): void {
     void patchProfile({ fullscreen: (event.target as HTMLInputElement).checked });
   });
 
-  $("#play-button").addEventListener("click", async () => {
-    const profile = activeProfile();
-    if (!profile) return;
-
-    if (!activeAccount()) {
-      toast("Add an account first", true);
-      switchView("accounts");
-      return;
-    }
-
-    if (!profile.versionId) {
-      toast("Pick a Minecraft version first", true);
-      return;
-    }
-
-    const button = $<HTMLButtonElement>("#play-button");
-    button.disabled = true;
-    button.textContent = "Working…";
-
-    try {
-      await api.launch(profile.id);
-      $("#kill-button").classList.remove("hidden");
-      button.textContent = "Running";
-      installed = await api.listInstalled();
-      renderVersionTrigger();
-    } catch (error) {
-      toast(errorMessage(error), true);
-      setProgress("Failed", 0, 1);
-      button.disabled = false;
-      button.textContent = "Play";
-    }
-  });
+  $("#play-button").addEventListener("click", () => void launchActive());
 
   $("#install-button").addEventListener("click", async () => {
     const profile = activeProfile();
@@ -1250,6 +1855,8 @@ async function boot(): Promise<void> {
   bindNavigation();
   bindAccounts();
   bindVersionPicker();
+  bindProfilesView();
+  bindProfileSheet();
   bindPlayView();
   bindModsView();
   bindCapes();
@@ -1265,6 +1872,12 @@ async function boot(): Promise<void> {
     loaders = await api.listLoaders();
   } catch {
     loaders = [];
+  }
+
+  try {
+    systemMemoryMb = await api.systemMemory();
+  } catch {
+    systemMemoryMb = 0;
   }
 
   renderAll();

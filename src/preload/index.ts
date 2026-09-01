@@ -41,6 +41,8 @@ const api = {
 
   updateSettings: (patch: Partial<Settings>): Promise<LauncherState> => ipcRenderer.invoke("settings:update", patch),
 
+  systemMemory: (): Promise<number> => ipcRenderer.invoke("system:memory"),
+
   listVersions: (): Promise<VersionSummary[]> => ipcRenderer.invoke("versions:list"),
   listInstalled: (): Promise<InstalledVersion[]> => ipcRenderer.invoke("versions:installed"),
   listLoaders: (): Promise<LoaderInfo[]> => ipcRenderer.invoke("loaders:list"),

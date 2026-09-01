@@ -90,6 +90,8 @@ Each profile stores the loader and an exact loader build. Leave the build on *Re
 - Searches Modrinth for the profile's loader, installs mods into the active profile, toggles and removes them
 - Pings servers with the real Server List Ping protocol, SRV records included
 - Keeps unlimited profiles, each with its own version, loader, loader build, RAM, JVM flags, window size and mod folder
+- The Profiles screen holds one card per profile — version, loader, memory, mod count, last played — with play, edit, duplicate, folder and a two-step delete on each
+- New profiles are made in one dialog: a preset row (Vanilla, Fabric, Forge, OptiFine, or a copy of the active profile), a searchable version picker, the loader build list, memory presets sized against the machine's own RAM, and a name that writes itself from the version and loader unless you type one. Everything else sits behind *Advanced*
 
 ## Layout on disk
 
