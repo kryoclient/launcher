@@ -67,11 +67,16 @@ function dashedUuid(id: string): string {
   return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
 }
 
+function secureTexture(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.startsWith("http://") ? `https://${url.slice(7)}` : url;
+}
+
 function profileToCapes(profile: MinecraftProfile): AccountCape[] {
   return profile.capes.map((cape) => ({
     id: cape.id,
     name: cape.alias ?? "Cape",
-    url: cape.url,
+    url: secureTexture(cape.url) ?? cape.url,
     active: cape.state === "ACTIVE"
   }));
 }
@@ -129,8 +134,8 @@ export class AccountStore {
       type: account.type,
       username: account.username,
       uuid: account.uuid,
-      skinUrl: account.skinUrl ?? null,
-      capes: account.capes ?? [],
+      skinUrl: secureTexture(account.skinUrl),
+      capes: (account.capes ?? []).map((cape) => ({ ...cape, url: secureTexture(cape.url) ?? cape.url })),
       activeCapeId: account.activeCapeId ?? null,
       licensed: account.type === "microsoft",
       xuid: account.xuid ?? ""
@@ -214,7 +219,7 @@ export class AccountStore {
       accessExpiresAt,
       xuid,
       flavor,
-      skinUrl: profile.skins.find((s) => s.state === "ACTIVE")?.url ?? null,
+      skinUrl: secureTexture(profile.skins.find((s) => s.state === "ACTIVE")?.url),
       capes,
       activeCapeId: capes.find((c) => c.active)?.id ?? null,
       addedAt: Date.now()
@@ -255,7 +260,7 @@ export class AccountStore {
     account.xuid = session.xuid || account.xuid;
     account.username = profile.name;
     account.uuid = dashedUuid(profile.id);
-    account.skinUrl = profile.skins.find((s) => s.state === "ACTIVE")?.url ?? null;
+    account.skinUrl = secureTexture(profile.skins.find((s) => s.state === "ACTIVE")?.url);
     account.capes = capes;
     account.activeCapeId = capes.find((c) => c.active)?.id ?? null;
     this.persist();
@@ -276,7 +281,7 @@ export class AccountStore {
     await uploadSkin(accessToken, basename(filePath), readFileSync(filePath), variant);
 
     const profile = await fetchProfile(accessToken);
-    stored.skinUrl = profile.skins.find((s) => s.state === "ACTIVE")?.url ?? stored.skinUrl;
+    stored.skinUrl = secureTexture(profile.skins.find((s) => s.state === "ACTIVE")?.url) ?? stored.skinUrl;
     this.persist();
 
     return this.toPublic(stored);
