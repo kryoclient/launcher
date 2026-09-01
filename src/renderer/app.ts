@@ -988,7 +988,7 @@ function draftSummary(): string {
   if (!draft.versionId) return "pick a version to continue";
 
   const parts = [draft.versionId, draft.loader === "vanilla" ? "vanilla" : loaderName(draft.loader).toLowerCase()];
-  if (draft.loader !== "vanilla") parts.push(draft.loaderVersion || "recommended build");
+  if (draft.loaderVersion) parts.push(draft.loaderVersion);
   parts.push(`${gb(draft.memoryMb).toLowerCase()} ram`);
   if (isInstalled(draft.versionId)) parts.push("installed");
 
