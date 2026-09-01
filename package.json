@@ -1,7 +1,7 @@
 {
   "name": "kryo-launcher",
   "productName": "KRYO Client",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Free Minecraft launcher built for performance",
   "main": "dist/main/index.js",
   "author": "KRYO",

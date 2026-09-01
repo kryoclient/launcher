@@ -8,8 +8,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SIZE = 1024;
 const SAMPLES = 4;
 
-const NIGHT = [10, 14, 17];
-const ICE = [47, 224, 245];
+const NIGHT = [10, 6, 5];
+const ICE = [246, 114, 43];
 const INNER = NIGHT.map((channel, index) => Math.round(channel + (ICE[index] - channel) * 0.11));
 
 const CORNER = 0.176;

@@ -2,6 +2,43 @@ import type { ReleaseEntry } from "./types";
 
 export const BUNDLED_CHANGELOG: ReleaseEntry[] = [
   {
+    tag: "v1.0.2",
+    version: "1.0.2",
+    name: "KRYO Client 1.0.2",
+    channel: "stable",
+    publishedAt: "2026-09-01",
+    url: "https://github.com/kryoclient/launcher/releases/tag/v1.0.2",
+    assets: [],
+    bundled: true,
+    notes: [
+      "A screen for profiles, a dialog that makes them in one pass, and a new look.",
+      "",
+      "## Profiles",
+      "",
+      "- Every profile is a card: version, loader and build, memory, mod count, last played",
+      "- Play, edit, duplicate, folder and delete on each card, and delete asks a second time",
+      "- Clicking a card selects it; the Play screen links here instead of carrying New and Delete",
+      "",
+      "## Making one",
+      "",
+      "- Presets fill the whole thing: Vanilla, Fabric, Forge, OptiFine, or a copy of the current profile",
+      "- The same searchable version picker, and the loader build list with Recommended first",
+      "- Memory presets bounded by the RAM the machine actually has",
+      "- The name writes itself from the version and loader unless you type one; Enter creates",
+      "- JVM arguments and window size moved behind Advanced",
+      "",
+      "## Look",
+      "",
+      "- Warm near-black, one orange accent, rounded corners",
+      "- Manrope ships with the launcher, so the interface renders the same everywhere",
+      "- New application icon",
+      "",
+      "## Fixes",
+      "",
+      "- Skins and capes load again: Mojang's http texture URLs were refused by the launcher's own content security policy, and are upgraded to https now"
+    ].join("\n")
+  },
+  {
     tag: "v1.0.1",
     version: "1.0.1",
     name: "KRYO Client 1.0.1",

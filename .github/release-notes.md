@@ -1,26 +1,16 @@
-Loaders, a real version picker, and a Microsoft sign-in that opens a browser window.
+A screen for profiles, a dialog that makes them in one pass, and a new look.
 
 ## What is new in VERSION
 
-**Five loaders, not one.** Fabric, Quilt, Forge, NeoForge and OptiFine, each with its own build list per Minecraft version. Forge and NeoForge run the official installer end to end — libraries, extracted data, and every processor — so 1.13+ builds are patched exactly the way the Forge installer patches them. OptiFine is fetched from optifine.net and patched against the vanilla jar. Leave the build on *Recommended* and KRYO follows the loader's own promotion; pick an exact one if you need it pinned.
+**Profiles have their own screen.** One card per profile with its version, loader and build, memory, mod count and when it was last played. Play, edit, duplicate, open folder and delete sit on every card — and delete now asks a second time instead of removing a profile on the first click. Clicking a card selects it; the Play screen keeps the dropdown and links here.
 
-**A version picker that can be searched.** The dropdown is gone. In its place: the full Mojang manifest, a search box, and filters for release, snapshot, old builds and "installed only".
+**Making a profile is one dialog.** Start from a preset — Vanilla, Fabric, Forge, OptiFine, or a copy of the profile you are on — and everything is filled in: the latest release, the loader, its recommended build. The version field is the same searchable picker, the memory row offers presets bounded by the RAM your machine actually has, and the name writes itself from the version and loader unless you type one. Enter creates it. JVM arguments and window size stay behind *Advanced*, where they belong.
 
-**Microsoft sign-in without the ceremony.** The real Microsoft page opens in a window — pick an account, approve, done. No device codes to copy, and no Azure application ID to register first. If you would rather use your own app registration, the field is still in Settings; leave it empty and the built-in one is used.
-
-**A second launch that does not re-check everything.** KRYO used to re-hash the client jar and stat every one of the ~4 750 asset files before each start. It now keeps the checksums it has already verified, keyed by size and modification time, and remembers that a profile's assets are complete. On the machine this was measured on that is 2.4 seconds of disk work per launch turned into 16 milliseconds. *Install only* still runs the full verification pass whenever you want everything checked again.
-
-**An Updates screen.** Every release and every beta, pulled from GitHub, with the notes rendered in the launcher. It is where you are reading this from, if you are reading it there.
-
-**A new icon.** On the window, the taskbar and the installer.
+**A new coat of paint.** Warm near-black instead of blue-grey, one orange accent, rounded corners, and Manrope — bundled with the launcher, so it looks the same on a machine that has never installed a font. The application icon follows.
 
 ### Fixes
 
-- Natives are unpacked into the base version folder — which is where the launch command actually looks for them. Modded profiles on 1.18 and older were pointing at an empty directory.
-- The classpath keeps one jar per artifact, so loader libraries no longer collide with the vanilla ones they replace.
-- Profiles that inherit from a pre-1.13 release keep their launch arguments instead of starting with none.
-- Libraries a loader builds locally are no longer downloaded, and no longer reported as failures.
-- Modrinth search follows the profile loader instead of always asking for Fabric builds.
+- Skins and capes load again. Mojang hands back texture URLs on `http`, which the launcher's own content security policy refuses, so the account avatar stayed blank. The scheme is upgraded now, including for accounts stored before this build.
 
 ## Which file do I download?
 
@@ -36,6 +26,7 @@ Loaders, a real version picker, and a Microsoft sign-in that opens a browser win
 
 - Installs any version Mojang lists, verifying every file by sha1
 - Fabric, Quilt, Forge, NeoForge and OptiFine from their official sources
+- A screen for profiles, and one dialog that creates them from a preset
 - Finds your Java, or downloads a matching Adoptium runtime when a version needs one you do not have
 - Mod browser over Modrinth: install, toggle and remove per profile, matched to the profile's loader
 - Two kinds of account: an offline nickname, or a Microsoft licence through Xbox Live → XSTS → Minecraft services, with an ownership check
