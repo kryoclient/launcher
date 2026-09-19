@@ -204,7 +204,7 @@ export function onConfigChange(newConfig) {
 
 ### Способ 2: Публикация в официальный каталог KryoClient Store
 
-1. Сделайте Fork репозитория [kryoclient](https://github.com/kryoclient/kryoclient).
+1. Сделайте Fork репозитория [kryoclient](https://github.com/kryoclient/launcher).
 2. Добавьте запись о вашем аддоне в [`addons/catalog.json`](./catalog.json) (с ссылкой на ваш `.zip` или с исходниками в `addons/src/`).
 3. Отправьте Pull Request.
 4. После проверки и слияния PR ваш аддон **автоматически появится в общем каталоге у всех пользователей лаунчера**!

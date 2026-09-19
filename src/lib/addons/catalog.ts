@@ -2,7 +2,7 @@ import type { AddonManifest } from "./types";
 import localCatalog from "../../../addons/catalog.json";
 
 export const DEFAULT_REMOTE_REGISTRY_URL =
-  "https://raw.githubusercontent.com/kryoclient/kryoclient/main/addons/catalog.json";
+  "https://raw.githubusercontent.com/kryoclient/launcher/new/addons/catalog.json";
 
 const CATALOG_STORAGE_KEY = "kryo:addons_catalog:v2";
 

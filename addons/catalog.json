@@ -35,7 +35,7 @@
     },
     "sizeBytes": 136481,
     "checksum": "d6163491483e8c22c6c12a757116f77249fe0aa33948033e4cb776a09500d82f",
-    "downloadUrl": "https://raw.githubusercontent.com/kryoclient/kryoclient/main/addons/dist/skin-3d-viewer.zip"
+    "downloadUrl": "https://raw.githubusercontent.com/kryoclient/launcher/new/addons/dist/skin-3d-viewer.zip"
   },
   {
     "id": "modrinth-browser",
@@ -48,7 +48,7 @@
     "tags": ["mods", "modrinth", "shaders", "resourcepacks"],
     "sizeBytes": 7145,
     "checksum": "bbf4e6ac1d2d1c16b422ebb1acc354d947c02870dece8d6a63709a3ea48e5727",
-    "downloadUrl": "https://raw.githubusercontent.com/kryoclient/kryoclient/main/addons/dist/modrinth-browser.zip"
+    "downloadUrl": "https://raw.githubusercontent.com/kryoclient/launcher/new/addons/dist/modrinth-browser.zip"
   },
   {
     "id": "discord-rpc",
@@ -86,6 +86,6 @@
     },
     "sizeBytes": 3578,
     "checksum": "a99b373513d061dc9db9cc1e5c4e83b9c19b9cd04d572f9ed9a80fb5ddefeecb",
-    "downloadUrl": "https://raw.githubusercontent.com/kryoclient/kryoclient/main/addons/dist/discord-rpc.zip"
+    "downloadUrl": "https://raw.githubusercontent.com/kryoclient/launcher/new/addons/dist/discord-rpc.zip"
   }
 ]

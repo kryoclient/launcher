@@ -100,7 +100,7 @@ for (const addonId of addonDirs) {
     ...manifest,
     sizeBytes: stats.size,
     checksum: hash,
-    downloadUrl: `https://raw.githubusercontent.com/kryoclient/kryoclient/main/addons/dist/${addonId}.zip`,
+    downloadUrl: `https://raw.githubusercontent.com/kryoclient/launcher/new/addons/dist/${addonId}.zip`,
   };
 
   catalogList.push(catalogItem);
