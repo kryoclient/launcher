@@ -2,17 +2,18 @@ name: Release
 
 on:
   push:
+    branches:
+      - new
     tags:
       - "v*"
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to build and attach the release to"
-        required: true
-        default: "v2.0.0"
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -67,15 +68,17 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           key: ${{ matrix.target }}
+          save-if: ${{ github.ref == 'refs/heads/new' }}
 
       - name: Install frontend dependencies
         run: bun install
 
       - uses: tauri-apps/tauri-action@v0
+        id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: KryoClient __VERSION__
           releaseBody: |
             KryoClient __VERSION__
@@ -85,3 +88,13 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        with:
+          name: kryoclient-${{ matrix.target }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            src-tauri/target/release/bundle/**
+            src-tauri/target/*/release/bundle/**
