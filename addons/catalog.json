@@ -6,7 +6,11 @@
     "description": "Интерактивная 3D-модель персонажа с анимацией, гардеробом скинов и установкой плащей.",
     "author": "KryoClient Team",
     "category": "customization",
-    "permissions": ["ui:slots", "storage:local", "game:profiles"],
+    "permissions": [
+      "ui:slots",
+      "storage:local",
+      "game:profiles"
+    ],
     "tags": [
       "skin",
       "cape",
@@ -33,8 +37,8 @@
         "default": 160
       }
     },
-    "sizeBytes": 136481,
-    "checksum": "d6163491483e8c22c6c12a757116f77249fe0aa33948033e4cb776a09500d82f",
+    "sizeBytes": 137273,
+    "checksum": "4e5f5e3a7d2e731cdb8235d57aa895e8590a51db9f772368b2250a23ca2a5088",
     "downloadUrl": "https://raw.githubusercontent.com/kryoclient/launcher/new/addons/dist/skin-3d-viewer.zip"
   },
   {
@@ -44,10 +48,19 @@
     "description": "Каталог модов, ресурспаков и шейдеров от Modrinth с быстрой установкой в один клик.",
     "author": "KryoClient Team",
     "category": "utility",
-    "permissions": ["fs:instances", "ui:slots", "network:fetch"],
-    "tags": ["mods", "modrinth", "shaders", "resourcepacks"],
-    "sizeBytes": 7145,
-    "checksum": "bbf4e6ac1d2d1c16b422ebb1acc354d947c02870dece8d6a63709a3ea48e5727",
+    "permissions": [
+      "fs:instances",
+      "ui:slots",
+      "network:fetch"
+    ],
+    "tags": [
+      "mods",
+      "modrinth",
+      "shaders",
+      "resourcepacks"
+    ],
+    "sizeBytes": 7008,
+    "checksum": "b99d95333045752bc83fdd0275b3e6e54bfac7bda57b6337fa97cda0299048d0",
     "downloadUrl": "https://raw.githubusercontent.com/kryoclient/launcher/new/addons/dist/modrinth-browser.zip"
   },
   {
@@ -63,7 +76,12 @@
       "ui:slots",
       "storage:local"
     ],
-    "tags": ["discord", "rpc", "status", "social"],
+    "tags": [
+      "discord",
+      "rpc",
+      "status",
+      "social"
+    ],
     "configSchema": {
       "showProfile": {
         "type": "boolean",
@@ -84,8 +102,8 @@
         "default": "Играет в KryoClient"
       }
     },
-    "sizeBytes": 3578,
-    "checksum": "a99b373513d061dc9db9cc1e5c4e83b9c19b9cd04d572f9ed9a80fb5ddefeecb",
+    "sizeBytes": 3519,
+    "checksum": "74050d0fa83b023bb8c623823612566125d4d2895c2e1e60125ef072b54499ef",
     "downloadUrl": "https://raw.githubusercontent.com/kryoclient/launcher/new/addons/dist/discord-rpc.zip"
   }
 ]
