@@ -47,8 +47,8 @@ mimalloc = { version = "0.1", default-features = false }
 libc = "0.2"
 
 [profile.release]
-codegen-units = 16
-lto = "thin"
+codegen-units = 1
+lto = true
 opt-level = "s"
 panic = "abort"
 strip = true

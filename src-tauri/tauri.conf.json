@@ -46,7 +46,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgyOTk2NjY4NzY1QzM3NjkKUldScE4xeDJhR2FaZ3B1SUo4Z2x5OHY4NmVyc0tHN3I2cHRzd0M1STkxY2RyVmxSUEpHYStzUmMK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY1QjBDNENERkMwNkRCNkMKUldSczJ3Yjh6Y1N3OVU3bUZOS01tZXFzSEZmc1JoTjJIRkY3M1JLVkQwUWtLY3ZKZlFCWU00cXAK",
       "endpoints": [
         "https://github.com/kryoclient/launcher/releases/latest/download/latest.json"
       ]
