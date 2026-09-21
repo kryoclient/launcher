@@ -1,7 +1,7 @@
 {
   "id": "discord-rpc",
   "name": "Discord Rich Presence",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Показывает в профиле Discord, что вы играете через KryoClient: версию Minecraft, никнейм и время игры.",
   "author": "KryoClient Team",
   "category": "integration",

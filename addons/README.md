@@ -90,12 +90,16 @@ await context.discord.setActivity({
 
 const status = await context.discord.getStatus();
 // status.state: "idle" | "connecting" | "connected" | "unavailable"
+// status.reason: "notRunning" | "refused" | "disconnected" | "activityRejected" | null
+// status.error: untranslated detail; show your own text based on `reason`
 const unsubscribe = context.discord.onStatusChange(console.log);
 await context.discord.clearActivity();
 ```
 
 Game events available through `context.events.on`: `game:launching`,
-`game:started`, `game:exited` and `state:updated`.
+`game:started`, `game:exited` and `state:updated` (profile, version or
+language changed). Read the language from
+`context.game.getLauncherState().language` (`"ENGLISH"` or `"RUSSIAN"`).
 
 ---
 
@@ -195,9 +199,11 @@ await context.discord.setActivity({
 
 const status = await context.discord.getStatus();
 // status.state: "idle" | "connecting" | "connected" | "unavailable"
+// status.reason: "notRunning" | "refused" | "disconnected" | "activityRejected" | null
+// status.error: подробность без перевода; свой текст показывайте по `reason`
 
 const unsubscribe = context.discord.onStatusChange((next) => {
-  console.log(next.state, next.user, next.error);
+  console.log(next.state, next.reason, next.user, next.error);
 });
 
 await context.discord.clearActivity();
@@ -212,7 +218,9 @@ await context.discord.clearActivity();
 - `game:launching` — запуск начался, в payload `{ profileId, versionId }`.
 - `game:started` — процесс Minecraft создан.
 - `game:exited` — игра закрылась; `{ failed: true }`, если запуск сорвался.
-- `state:updated` — выбран другой профиль или версия.
+- `state:updated` — выбран другой профиль, версия или язык. Язык лаунчера
+  читается из `context.game.getLauncherState().language` (`"ENGLISH"` или
+  `"RUSSIAN"`).
 
 ### 3. Логика аддона (`src/index.js` или `src/index.tsx`)
 

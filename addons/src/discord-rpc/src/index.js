@@ -6,6 +6,64 @@ const LOGO_URL =
 const DOWNLOAD_URL = "https://github.com/kryoclient/launcher/releases/latest";
 const DISCORD_BLURPLE = "#5865F2";
 
+// Friends read the status, so it follows the language picked in the launcher.
+const STRINGS = {
+  en: {
+    menu: "In the main menu",
+    launching: (v) => (v ? `Launching Minecraft ${v}` : "Launching Minecraft"),
+    playing: (v) => (v ? `Playing Minecraft ${v}` : "Playing Minecraft"),
+    download: "Download KryoClient",
+    needsLauncher:
+      "Discord status needs KryoClient 2.0.1 or newer, please update the launcher",
+    off: "Discord status is off (click to turn it on)",
+    on: "Discord status is on",
+    visible: (user) =>
+      user ? `Visible in Discord as ${user}` : "Visible in Discord",
+    connecting: "Connecting to Discord...",
+    retry: "Retrying every 15 seconds",
+    notRunning: "Discord is not running",
+    refused: (detail) => `Discord refused the connection: ${detail}`,
+    disconnected: "Lost the connection to Discord",
+    rejected: (detail) => `Discord rejected the status: ${detail}`,
+    unavailable: "Discord is unavailable",
+    turnedOn: "Discord status turned on",
+    turnedOff: "Discord status turned off",
+    updateFailed: (err) => `Could not update the Discord status: ${err}`,
+  },
+  ru: {
+    menu: "В главном меню",
+    launching: (v) => (v ? `Запускает Minecraft ${v}` : "Запускает Minecraft"),
+    playing: (v) => (v ? `Играет в Minecraft ${v}` : "Играет в Minecraft"),
+    download: "Скачать KryoClient",
+    needsLauncher:
+      "Статус в Discord требует KryoClient 2.0.1 или новее — обновите лаунчер",
+    off: "Статус в Discord выключен (нажмите, чтобы включить)",
+    on: "Статус в Discord включён",
+    visible: (user) =>
+      user ? `Статус виден в Discord (${user})` : "Статус виден в Discord",
+    connecting: "Подключение к Discord...",
+    retry: "Повтор каждые 15 секунд",
+    notRunning: "Discord не запущен",
+    refused: (detail) => `Discord отклонил подключение: ${detail}`,
+    disconnected: "Соединение с Discord потеряно",
+    rejected: (detail) => `Discord отклонил статус: ${detail}`,
+    unavailable: "Discord недоступен",
+    turnedOn: "Статус в Discord включён",
+    turnedOff: "Статус в Discord выключен",
+    updateFailed: (err) => `Не удалось обновить статус в Discord: ${err}`,
+  },
+};
+
+function strings() {
+  let language = null;
+  try {
+    language = api && api.game.getLauncherState()?.language;
+  } catch {
+    // Fall back to English, like the launcher does before its state loads
+  }
+  return language === "RUSSIAN" ? STRINGS.ru : STRINGS.en;
+}
+
 // Connection lives in the launcher core: Discord only accepts Rich Presence
 // over its local IPC socket, which the addon sandbox cannot reach on its own.
 let api = null;
@@ -67,6 +125,7 @@ function buildActivity() {
   const showVersion = setting("showVersion", true) !== false;
   const showButton = setting("showButton", true) !== false;
 
+  const text = strings();
   const profile = currentProfile();
   const username = profile && profile.username ? profile.username : null;
   const versionId = currentVersionId();
@@ -75,11 +134,11 @@ function buildActivity() {
   let stateParts = [];
 
   if (phase === "playing") {
-    details = versionId ? `Играет в Minecraft ${versionId}` : "Играет в Minecraft";
+    details = text.playing(versionId);
   } else if (phase === "launching") {
-    details = versionId ? `Запускает Minecraft ${versionId}` : "Запускает Minecraft";
+    details = text.launching(versionId);
   } else {
-    details = field(setting("customDetails", "")) || "В главном меню";
+    details = field(setting("customDetails", "")) || text.menu;
     if (showVersion && versionId) stateParts.push(versionId);
   }
 
@@ -88,7 +147,9 @@ function buildActivity() {
   const activity = {
     details: field(details) || "KryoClient",
     timestamps: {
-      start: Math.floor((phase === "playing" && gameStart ? gameStart : sessionStart) / 1000),
+      start: Math.floor(
+        (phase === "playing" && gameStart ? gameStart : sessionStart) / 1000,
+      ),
     },
     assets: {
       large_image: LOGO_URL,
@@ -105,7 +166,7 @@ function buildActivity() {
   }
 
   if (showButton) {
-    activity.buttons = [{ label: "Скачать KryoClient", url: DOWNLOAD_URL }];
+    activity.buttons = [{ label: text.download, url: DOWNLOAD_URL }];
   }
 
   return activity;
@@ -120,7 +181,7 @@ function push() {
   }
 
   api.discord.setActivity(buildActivity()).catch((err) => {
-    api.logger.error(`Не удалось обновить статус: ${err}`);
+    api.logger.error(strings().updateFailed(err));
   });
 }
 
@@ -136,24 +197,36 @@ function setPhase(next, versionId) {
   push();
 }
 
+function failureText(text) {
+  switch (status.reason) {
+    case "notRunning":
+      return text.notRunning;
+    case "refused":
+      return text.refused(status.error);
+    case "disconnected":
+      return text.disconnected;
+    case "activityRejected":
+      return text.rejected(status.error);
+    default:
+      return status.error || text.unavailable;
+  }
+}
+
 function statusLabel() {
-  if (!api || !api.discord) {
-    return "Обновите лаунчер: этой версии нужен KryoClient 2.0.1 или новее";
-  }
-  if (!isEnabled()) {
-    return "Статус в Discord выключен (нажмите, чтобы включить)";
-  }
+  const text = strings();
+  if (!api || !api.discord) return text.needsLauncher;
+  if (!isEnabled()) return text.off;
   switch (status.state) {
     case "connected":
-      return status.error
-        ? `Discord отклонил статус: ${status.error}`
-        : `Статус виден в Discord${status.user ? ` (${status.user})` : ""}`;
+      return status.reason || status.error
+        ? failureText(text)
+        : text.visible(status.user);
     case "connecting":
-      return "Подключение к Discord...";
+      return text.connecting;
     case "unavailable":
-      return `${status.error || "Discord недоступен"}. Повтор каждые 15 секунд`;
+      return `${failureText(text)}. ${text.retry}`;
     default:
-      return "Статус в Discord включён";
+      return text.on;
   }
 }
 
@@ -184,11 +257,9 @@ function DiscordRpcWidget() {
   const live = enabled && status.state === "connected" && !status.error;
 
   const toggle = () => {
+    const text = strings();
     if (!supported) {
-      api.ui.showToast(
-        "Статус в Discord требует KryoClient 2.0.1 или новее",
-        "error",
-      );
+      api.ui.showToast(text.needsLauncher, "error");
       return;
     }
     const next = !isEnabled();
@@ -196,7 +267,7 @@ function DiscordRpcWidget() {
     push();
     notifyStatus();
     api.ui.showToast(
-      next ? "Статус в Discord включён" : "Статус в Discord выключен",
+      next ? text.turnedOn : text.turnedOff,
       next ? "success" : "info",
     );
   };
@@ -243,7 +314,7 @@ export default {
   manifest: {
     id: "discord-rpc",
     name: "Discord Rich Presence",
-    version: "2.0.0",
+    version: "2.0.1",
     description:
       "Показывает в профиле Discord, что вы играете через KryoClient: версию Minecraft, никнейм и время игры.",
     author: "KryoClient Team",
@@ -268,9 +339,7 @@ export default {
     api.ui.registerSlot("header.actions", "rpc-btn", DiscordRpcWidget, 10);
 
     if (!api.discord) {
-      api.logger.error(
-        "Статус в Discord требует KryoClient 2.0.1 или новее — обновите лаунчер",
-      );
+      api.logger.error(strings().needsLauncher);
       return;
     }
 
@@ -295,8 +364,11 @@ export default {
       }),
       api.events.on("game:started", () => setPhase("playing")),
       api.events.on("game:exited", () => setPhase("menu")),
-      // Profile or version switched in the launcher UI
-      api.events.on("state:updated", () => push()),
+      // Profile, version or language switched in the launcher UI
+      api.events.on("state:updated", () => {
+        push();
+        notifyStatus();
+      }),
       api.events.on("addon:discord-rpc:configChange", () => {
         push();
         notifyStatus();

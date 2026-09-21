@@ -40,17 +40,19 @@ class AddonRegistry {
   private discordOwner: string | null = null;
 
   constructor() {
-    // Let addons react to the player picking another profile or version
+    // Let addons react to the player picking another profile, version or language
     useLauncherStore.subscribe((store, previous) => {
       const next = store.state;
       const prev = previous.state;
       if (
         next?.selectedProfileId !== prev?.selectedProfileId ||
-        next?.selectedVersionId !== prev?.selectedVersionId
+        next?.selectedVersionId !== prev?.selectedVersionId ||
+        next?.language !== prev?.language
       ) {
         this.emit("state:updated", {
           selectedProfileId: next?.selectedProfileId ?? null,
           selectedVersionId: next?.selectedVersionId ?? null,
+          language: next?.language ?? null,
         });
       }
     });

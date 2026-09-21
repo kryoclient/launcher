@@ -37,11 +37,23 @@ pub enum ConnectionState {
     Unavailable,
 }
 
+/// Why the last attempt failed, so addons can explain it in the launcher's language.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FailureReason {
+    NotRunning,
+    Refused,
+    Disconnected,
+    ActivityRejected,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct DiscordStatus {
     pub state: ConnectionState,
     /// Display name of the Discord account the client is logged into.
     pub user: Option<String>,
+    pub reason: Option<FailureReason>,
+    /// Untranslated detail from Discord or the OS.
     pub error: Option<String>,
 }
 
@@ -50,10 +62,13 @@ impl DiscordStatus {
         Self {
             state,
             user: None,
+            reason: None,
             error: None,
         }
     }
 }
+
+type Failure = (FailureReason, String);
 
 pub struct DiscordPresence {
     activity: watch::Sender<Option<Value>>,
@@ -99,7 +114,7 @@ async fn run(
 
         publish(&app, &status_tx, DiscordStatus::new(ConnectionState::Connecting));
 
-        let error = match connect().await {
+        let (reason, error) = match connect().await {
             Ok((stream, user)) => {
                 publish(
                     &app,
@@ -107,16 +122,17 @@ async fn run(
                     DiscordStatus {
                         state: ConnectionState::Connected,
                         user: user.clone(),
+                        reason: None,
                         error: None,
                     },
                 );
                 match session(stream, user, &mut activity_rx, &app, &status_tx).await {
                     // The activity was cleared; go back to idle without a retry delay.
                     Ok(()) => continue,
-                    Err(e) => e,
+                    Err(e) => (FailureReason::Disconnected, e),
                 }
             }
-            Err(e) => e,
+            Err(failure) => failure,
         };
 
         publish(
@@ -125,6 +141,7 @@ async fn run(
             DiscordStatus {
                 state: ConnectionState::Unavailable,
                 user: None,
+                reason: Some(reason),
                 error: Some(error),
             },
         );
@@ -141,22 +158,24 @@ async fn run(
     }
 }
 
-async fn connect() -> Result<(Box<dyn IpcStream>, Option<String>), String> {
+async fn connect() -> Result<(Box<dyn IpcStream>, Option<String>), Failure> {
     let mut stream = open_socket()
         .await
-        .map_err(|_| "Discord не запущен".to_string())?;
+        .map_err(|_| (FailureReason::NotRunning, "Discord is not running".to_string()))?;
+
+    let refused = |detail: String| (FailureReason::Refused, detail);
 
     write_frame(&mut stream, OP_HANDSHAKE, &json!({ "v": 1, "client_id": CLIENT_ID }))
         .await
-        .map_err(|e| format!("Ошибка подключения к Discord: {e}"))?;
+        .map_err(|e| refused(e.to_string()))?;
 
     let (op, frame) = tokio::time::timeout(HANDSHAKE_TIMEOUT, read_frame(&mut stream))
         .await
-        .map_err(|_| "Discord не ответил на подключение".to_string())?
-        .map_err(|e| format!("Ошибка подключения к Discord: {e}"))?;
+        .map_err(|_| refused("no answer to the handshake".to_string()))?
+        .map_err(|e| refused(e.to_string()))?;
 
     if op == OP_CLOSE || frame["evt"] != "READY" {
-        return Err(format!("Discord отклонил подключение: {}", frame_message(&frame)));
+        return Err(refused(frame_message(&frame)));
     }
 
     let user = &frame["data"]["user"];
@@ -224,22 +243,20 @@ async fn pump<W: AsyncWrite + Unpin>(
                         .await
                         .map_err(|e| e.to_string())?;
                 }
-                Some((OP_CLOSE, payload)) => {
-                    return Err(format!("Discord закрыл соединение: {}", frame_message(&payload)));
-                }
+                Some((OP_CLOSE, payload)) => return Err(frame_message(&payload)),
                 Some((_, payload)) if payload["cmd"] == "SET_ACTIVITY" => {
                     // Invalid activities are rejected per command, not by closing the pipe.
-                    let error = (payload["evt"] == "ERROR")
-                        .then(|| format!("Discord отклонил статус: {}", frame_message(&payload)));
+                    let rejected = payload["evt"] == "ERROR";
                     let status = DiscordStatus {
                         state: ConnectionState::Connected,
                         user: user.clone(),
-                        error,
+                        reason: rejected.then_some(FailureReason::ActivityRejected),
+                        error: rejected.then(|| frame_message(&payload)),
                     };
                     publish(app, status_tx, status);
                 }
                 Some(_) => {}
-                None => return Err("Discord закрыл соединение".to_string()),
+                None => return Err("Discord closed the connection".to_string()),
             },
         }
     }
@@ -269,7 +286,7 @@ fn frame_message(frame: &Value) -> String {
     frame["data"]["message"]
         .as_str()
         .or_else(|| frame["message"].as_str())
-        .unwrap_or("неизвестная ошибка")
+        .unwrap_or("unknown error")
         .to_string()
 }
 

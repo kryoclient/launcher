@@ -188,9 +188,15 @@ export interface DiscordActivity {
 export type DiscordConnectionState =
   "idle" | "connecting" | "connected" | "unavailable";
 
+/** Why Discord is unavailable or refused the status; stable across languages. */
+export type DiscordFailureReason =
+  "notRunning" | "refused" | "disconnected" | "activityRejected";
+
 export interface DiscordStatus {
   state: DiscordConnectionState;
   user: string | null;
+  reason: DiscordFailureReason | null;
+  /** Untranslated detail from Discord or the OS. */
   error: string | null;
 }
 

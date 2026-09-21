@@ -53,7 +53,7 @@
   {
     "id": "discord-rpc",
     "name": "Discord Rich Presence",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "description": "Показывает в профиле Discord, что вы играете через KryoClient: версию Minecraft, никнейм и время игры.",
     "author": "KryoClient Team",
     "category": "integration",
@@ -92,8 +92,8 @@
         "default": ""
       }
     },
-    "sizeBytes": 3914,
-    "checksum": "6dc2ffd87c444a2b2ee34817e39b99a2191241401b3d420e86dd0c1c787943cd",
+    "sizeBytes": 4420,
+    "checksum": "0ca86a20f6256eee41d953d5cb1b87581707f903a9ce6a9aa64b7c70064d2fa0",
     "downloadUrl": "https://raw.githubusercontent.com/kryoclient/launcher/new/addons/dist/discord-rpc.zip"
   }
 ]
