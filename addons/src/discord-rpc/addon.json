@@ -1,0 +1,43 @@
+{
+  "id": "discord-rpc",
+  "name": "Discord Rich Presence",
+  "version": "2.0.0",
+  "description": "Показывает в профиле Discord, что вы играете через KryoClient: версию Minecraft, никнейм и время игры.",
+  "author": "KryoClient Team",
+  "category": "integration",
+  "minLauncherVersion": "2.0.1",
+  "permissions": [
+    "game:profiles",
+    "ui:slots",
+    "storage:local",
+    "integration:discord"
+  ],
+  "tags": ["discord", "rpc", "status", "social"],
+  "configSchema": {
+    "showProfile": {
+      "type": "boolean",
+      "label": "Показывать никнейм",
+      "description": "Отображает имя текущего профиля и его скин в статусе",
+      "default": true
+    },
+    "showVersion": {
+      "type": "boolean",
+      "label": "Показывать версию Minecraft",
+      "description": "Отображает выбранную версию игры",
+      "default": true
+    },
+    "showButton": {
+      "type": "boolean",
+      "label": "Кнопка «Скачать KryoClient»",
+      "description": "Добавляет в статус кнопку со ссылкой на лаунчер (её видите не вы, а другие)",
+      "default": true
+    },
+    "customDetails": {
+      "type": "string",
+      "label": "Свой текст в меню",
+      "description": "Заменяет верхнюю строку статуса, пока игра не запущена. Пусто — текст по умолчанию",
+      "placeholder": "Выбирает версию",
+      "default": ""
+    }
+  }
+}

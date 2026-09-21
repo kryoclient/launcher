@@ -6,11 +6,7 @@
     "description": "Интерактивная 3D-модель персонажа с анимацией, гардеробом скинов и установкой плащей.",
     "author": "KryoClient Team",
     "category": "customization",
-    "permissions": [
-      "ui:slots",
-      "storage:local",
-      "game:profiles"
-    ],
+    "permissions": ["ui:slots", "storage:local", "game:profiles"],
     "tags": [
       "skin",
       "cape",
@@ -48,17 +44,8 @@
     "description": "Каталог модов, ресурспаков и шейдеров от Modrinth с быстрой установкой в один клик.",
     "author": "KryoClient Team",
     "category": "utility",
-    "permissions": [
-      "fs:instances",
-      "ui:slots",
-      "network:fetch"
-    ],
-    "tags": [
-      "mods",
-      "modrinth",
-      "shaders",
-      "resourcepacks"
-    ],
+    "permissions": ["fs:instances", "ui:slots", "network:fetch"],
+    "tags": ["mods", "modrinth", "shaders", "resourcepacks"],
     "sizeBytes": 7008,
     "checksum": "b99d95333045752bc83fdd0275b3e6e54bfac7bda57b6337fa97cda0299048d0",
     "downloadUrl": "https://raw.githubusercontent.com/kryoclient/launcher/new/addons/dist/modrinth-browser.zip"
@@ -66,44 +53,47 @@
   {
     "id": "discord-rpc",
     "name": "Discord Rich Presence",
-    "version": "1.1.0",
-    "description": "Отображает ваш статус в Discord: версию Minecraft, выбранный профиль и время игры в лаунчере.",
+    "version": "2.0.0",
+    "description": "Показывает в профиле Discord, что вы играете через KryoClient: версию Minecraft, никнейм и время игры.",
     "author": "KryoClient Team",
     "category": "integration",
+    "minLauncherVersion": "2.0.1",
     "permissions": [
-      "game:lifecycle",
       "game:profiles",
       "ui:slots",
-      "storage:local"
+      "storage:local",
+      "integration:discord"
     ],
-    "tags": [
-      "discord",
-      "rpc",
-      "status",
-      "social"
-    ],
+    "tags": ["discord", "rpc", "status", "social"],
     "configSchema": {
       "showProfile": {
         "type": "boolean",
-        "label": "Показывать никнейм в статусе",
-        "description": "Отображает имя текущего профиля в Discord",
+        "label": "Показывать никнейм",
+        "description": "Отображает имя текущего профиля и его скин в статусе",
         "default": true
       },
       "showVersion": {
         "type": "boolean",
         "label": "Показывать версию Minecraft",
-        "description": "Отображает установленную версию игры",
+        "description": "Отображает выбранную версию игры",
+        "default": true
+      },
+      "showButton": {
+        "type": "boolean",
+        "label": "Кнопка «Скачать KryoClient»",
+        "description": "Добавляет в статус кнопку со ссылкой на лаунчер (её видите не вы, а другие)",
         "default": true
       },
       "customDetails": {
         "type": "string",
-        "label": "Кастомный статус",
-        "placeholder": "Играет в кубы",
-        "default": "Играет в KryoClient"
+        "label": "Свой текст в меню",
+        "description": "Заменяет верхнюю строку статуса, пока игра не запущена. Пусто — текст по умолчанию",
+        "placeholder": "Выбирает версию",
+        "default": ""
       }
     },
-    "sizeBytes": 3519,
-    "checksum": "74050d0fa83b023bb8c623823612566125d4d2895c2e1e60125ef072b54499ef",
+    "sizeBytes": 3914,
+    "checksum": "6dc2ffd87c444a2b2ee34817e39b99a2191241401b3d420e86dd0c1c787943cd",
     "downloadUrl": "https://raw.githubusercontent.com/kryoclient/launcher/new/addons/dist/discord-rpc.zip"
   }
 ]

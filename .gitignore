@@ -27,7 +27,7 @@ node_modules
 .kryoclient/
 *.key
 
-# Addons sources (only compiled zip archives in addons/dist/ are committed)
-addons/src/
+# Addon build output (sources live in addons/src/<id>/, archives in addons/dist/)
+addons/src/*/index.js
 !addons/dist/*.zip
 !addons/catalog.json

@@ -21,6 +21,7 @@ import {
   FolderTree,
   UserCheck,
   CheckCircle2,
+  MessageCircle,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -74,6 +75,10 @@ const PERMISSION_CONFIG: Record<
     key: "fsInstances",
     icon: FolderTree,
     highRisk: true,
+  },
+  "integration:discord": {
+    key: "integrationDiscord",
+    icon: MessageCircle,
   },
 };
 

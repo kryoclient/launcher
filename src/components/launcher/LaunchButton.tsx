@@ -109,8 +109,10 @@ export const LaunchButton = () => {
 
       if (payload.status === "success") {
         dispatch({ type: "SUCCESS" });
+        addonRegistry.emit("game:started", {});
       } else if (payload.status === "finished") {
         dispatch({ type: "FINISHED" });
+        addonRegistry.emit("game:exited", {});
       } else {
         dispatch({
           type: "PROGRESS",
@@ -167,6 +169,7 @@ export const LaunchButton = () => {
       console.error(error);
       alert(`Launch error: ${error}`);
       dispatch({ type: "ERROR" });
+      addonRegistry.emit("game:exited", { failed: true });
     }
   };
 

@@ -1,5 +1,6 @@
 pub mod addons;
 pub mod auth;
+pub mod discord;
 pub mod minecraft;
 pub mod msa;
 pub mod open_launcher;
@@ -1376,6 +1377,7 @@ pub fn run() {
                 last_crash: Mutex::new(None),
                 is_game_running: std::sync::atomic::AtomicBool::new(false),
             });
+            app.manage(discord::DiscordPresence::spawn(handle.clone()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1418,7 +1420,10 @@ pub fn run() {
             addons::download_and_install_addon,
             addons::download_addon_archive_bytes,
             addons::save_local_addon,
-            addons::inspect_addon_archive
+            addons::inspect_addon_archive,
+            discord::discord_set_activity,
+            discord::discord_clear_activity,
+            discord::discord_get_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1489,20 +1494,23 @@ mod tests {
 
     #[test]
     fn test_addon_verification_spoof_prevention() {
+        // Read the expected hash from the catalog: rebuilding an addon changes it
+        let catalog: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("../../addons/catalog.json")).unwrap();
+        let official = catalog
+            .iter()
+            .find(|item| item["id"] == "skin-3d-viewer")
+            .and_then(|item| item["checksum"].as_str())
+            .expect("skin-3d-viewer must stay in the catalog");
+
         // Unknown or spoofed author addon with invalid hash must not be verified
         assert!(!addons::is_verified_addon("unknown-addon", None));
-        assert!(!addons::is_verified_addon(
-            "unknown-addon",
-            Some("a94caf582b190a8413ce0b154fa9f024c359a849b0c2e589add6fe3d1e779700")
-        ));
+        assert!(!addons::is_verified_addon("unknown-addon", Some(official)));
         assert!(!addons::is_verified_addon(
             "skin-3d-viewer",
             Some("fake_hash")
         ));
         // Correct official addon checksum matches
-        assert!(addons::is_verified_addon(
-            "skin-3d-viewer",
-            Some("a94caf582b190a8413ce0b154fa9f024c359a849b0c2e589add6fe3d1e779700")
-        ));
+        assert!(addons::is_verified_addon("skin-3d-viewer", Some(official)));
     }
 }

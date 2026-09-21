@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useLauncherStore } from "@/state";
 import { addGameLog } from "@/lib/logger";
 import type {
@@ -7,6 +9,7 @@ import type {
   AddonPermission,
   AddonSlotName,
   BeforeLaunchHook,
+  DiscordStatus,
   EventCallback,
   LaunchContext,
   KryoAddon,
@@ -32,6 +35,26 @@ class AddonRegistry {
 
   // Crash Tracking
   private crashCounts: Map<string, number> = new Map();
+
+  // Discord Rich Presence is a single shared slot: the addon that set it owns it
+  private discordOwner: string | null = null;
+
+  constructor() {
+    // Let addons react to the player picking another profile or version
+    useLauncherStore.subscribe((store, previous) => {
+      const next = store.state;
+      const prev = previous.state;
+      if (
+        next?.selectedProfileId !== prev?.selectedProfileId ||
+        next?.selectedVersionId !== prev?.selectedVersionId
+      ) {
+        this.emit("state:updated", {
+          selectedProfileId: next?.selectedProfileId ?? null,
+          selectedVersionId: next?.selectedVersionId ?? null,
+        });
+      }
+    });
+  }
 
   private recomputeCache() {
     const newCache = new Map<AddonSlotName, SlotItem[]>();
@@ -409,7 +432,65 @@ class AddonRegistry {
         consume: (name) => this.consumeService(name),
         has: (name) => this.hasService(name),
       },
+      discord: {
+        setActivity: (activity) => {
+          this.assertPermission(
+            manifest,
+            "integration:discord",
+            "discord.setActivity",
+          );
+          this.discordOwner = addonId;
+          return invoke("discord_set_activity", { activity });
+        },
+        clearActivity: () => {
+          this.assertPermission(
+            manifest,
+            "integration:discord",
+            "discord.clearActivity",
+          );
+          return this.clearDiscordActivity(addonId);
+        },
+        getStatus: () => {
+          this.assertPermission(
+            manifest,
+            "integration:discord",
+            "discord.getStatus",
+          );
+          return invoke<DiscordStatus>("discord_get_status");
+        },
+        onStatusChange: (callback) => {
+          this.assertPermission(
+            manifest,
+            "integration:discord",
+            "discord.onStatusChange",
+          );
+          const pending = listen<DiscordStatus>("discord-status", (event) => {
+            try {
+              callback(event.payload);
+            } catch (err) {
+              console.error(
+                `Error in Discord status listener for '${addonId}':`,
+                err,
+              );
+            }
+          });
+          return () => {
+            pending.then((unlisten) => unlisten()).catch(() => {});
+          };
+        },
+      },
     };
+  }
+
+  /** Drops the presence if this addon is the one currently showing it. */
+  private async clearDiscordActivity(addonId: string): Promise<void> {
+    if (this.discordOwner !== addonId) return;
+    this.discordOwner = null;
+    try {
+      await invoke("discord_clear_activity");
+    } catch (err) {
+      console.error("Failed to clear Discord activity:", err);
+    }
   }
 
   // Lifecycle
@@ -445,6 +526,8 @@ class AddonRegistry {
       this.unregisterAllSlotsForAddon(addonId);
       this.beforeLaunchHooks.delete(addonId);
       this.activeAddons.delete(addonId);
+      // A crashed or disabled addon must not leave its status hanging in Discord
+      await this.clearDiscordActivity(addonId);
       active.api.logger.info(`Deactivated`);
     }
   }

@@ -72,6 +72,31 @@ export function onConfigChange(newConfig) {
 }
 ```
 
+### Discord Rich Presence (`context.discord`)
+
+Addons cannot reach Discord themselves: its local WebSocket server only accepts
+whitelisted origins, and Rich Presence runs over the `discord-ipc-0` socket,
+which only the launcher core can open. Ask for the `integration:discord`
+permission and hand the activity to the launcher instead — it owns connecting,
+reconnecting and clearing. Requires KryoClient 2.0.1 or newer.
+
+```javascript
+await context.discord.setActivity({
+  details: "Playing Minecraft 1.21.4", // top line, 2-128 characters
+  state: "Steve", // second line, optional
+  timestamps: { start: Math.floor(Date.now() / 1000) },
+  assets: { large_image: "https://.../logo.png", large_text: "KryoClient" },
+});
+
+const status = await context.discord.getStatus();
+// status.state: "idle" | "connecting" | "connected" | "unavailable"
+const unsubscribe = context.discord.onStatusChange(console.log);
+await context.discord.clearActivity();
+```
+
+Game events available through `context.events.on`: `game:launching`,
+`game:started`, `game:exited` and `state:updated`.
+
 ---
 
 ## 🚀 How to Publish & Share Community Addons
@@ -149,6 +174,45 @@ my-addon.zip
 - `network:fetch` — выполнение сетевых запросов к внешним API.
 - `storage:local` — сохранение данных и настроек на диск.
 - `fs:instances` — доступ к папкам установленных версий и скриншотам.
+- `integration:discord` — управление статусом Rich Presence в профиле Discord.
+
+### Статус в Discord (`context.discord`)
+
+Напрямую из аддона до Discord не достучаться: локальный WebSocket-сервер Discord
+принимает только доверенные origin, а Rich Presence работает через IPC-канал
+(`discord-ipc-0`), доступный лишь ядру лаунчера. Поэтому аддон передаёт статус
+через `context.discord`, а подключение, переподключение и очистку берёт на себя
+KryoClient. Требуется право `integration:discord` и KryoClient 2.0.1 или новее.
+
+```javascript
+await context.discord.setActivity({
+  details: "Играет в Minecraft 1.21.4", // верхняя строка, 2-128 символов
+  state: "Ник: Steve", // нижняя строка, необязательна
+  timestamps: { start: Math.floor(Date.now() / 1000) }, // счётчик времени
+  assets: { large_image: "https://.../logo.png", large_text: "KryoClient" },
+  buttons: [{ label: "Скачать", url: "https://example.com" }],
+});
+
+const status = await context.discord.getStatus();
+// status.state: "idle" | "connecting" | "connected" | "unavailable"
+
+const unsubscribe = context.discord.onStatusChange((next) => {
+  console.log(next.state, next.user, next.error);
+});
+
+await context.discord.clearActivity();
+```
+
+Статус в Discord один на весь лаунчер: его занимает тот аддон, который вызвал
+`setActivity` последним. При выключении или сбое аддона лаунчер очищает статус
+сам.
+
+### События игры (`context.events`)
+
+- `game:launching` — запуск начался, в payload `{ profileId, versionId }`.
+- `game:started` — процесс Minecraft создан.
+- `game:exited` — игра закрылась; `{ failed: true }`, если запуск сорвался.
+- `state:updated` — выбран другой профиль или версия.
 
 ### 3. Логика аддона (`src/index.js` или `src/index.tsx`)
 

@@ -12,7 +12,8 @@ export type AddonPermission =
   | "ui:slots"
   | "ui:notifications"
   | "storage:local"
-  | "network:fetch";
+  | "network:fetch"
+  | "integration:discord";
 
 export type ConfigFieldType = "boolean" | "string" | "number" | "select";
 
@@ -170,6 +171,36 @@ export interface AddonLoggerContext {
   error: (message: string) => void;
 }
 
+/** Activity payload accepted by Discord's SET_ACTIVITY command. */
+export interface DiscordActivity {
+  details?: string;
+  state?: string;
+  timestamps?: { start?: number; end?: number };
+  assets?: {
+    large_image?: string;
+    large_text?: string;
+    small_image?: string;
+    small_text?: string;
+  };
+  buttons?: { label: string; url: string }[];
+}
+
+export type DiscordConnectionState =
+  "idle" | "connecting" | "connected" | "unavailable";
+
+export interface DiscordStatus {
+  state: DiscordConnectionState;
+  user: string | null;
+  error: string | null;
+}
+
+export interface AddonDiscordContext {
+  setActivity: (activity: DiscordActivity) => Promise<void>;
+  clearActivity: () => Promise<void>;
+  getStatus: () => Promise<DiscordStatus>;
+  onStatusChange: (callback: (status: DiscordStatus) => void) => () => void;
+}
+
 export interface AddonServicesContext {
   provide: <T = unknown>(serviceName: string, serviceInstance: T) => void;
   consume: <T = unknown>(serviceName: string) => T | undefined;
@@ -185,6 +216,7 @@ export interface AddonApi {
   storage: AddonStorageContext;
   logger: AddonLoggerContext;
   services: AddonServicesContext;
+  discord: AddonDiscordContext;
 }
 
 export interface KryoAddon {

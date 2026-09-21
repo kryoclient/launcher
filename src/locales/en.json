@@ -205,6 +205,10 @@
         "fsInstances": {
           "label": "Instance Files",
           "desc": "Read and write files directly inside instance directories"
+        },
+        "integrationDiscord": {
+          "label": "Discord Status",
+          "desc": "Show what you are playing in your Discord profile"
         }
       }
     },
